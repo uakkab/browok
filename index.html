@@ -66,8 +66,8 @@
         </div>
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div id="info">
-            <div>Arrow Keys: Move Left/Right | Space: Jump | I: Fullscreen</div>
-            <div>Hit question blocks from below for coins!</div>
+            <div>Arrow Keys: Move | Space: Jump | X: Fireball (when big) | I: Fullscreen</div>
+            <div>Hit question blocks for coins and mushrooms! Stomp or burn Goombas!</div>
         </div>
         <div class="controls">Press R to restart | Reach both flags at the end!</div>
     </div>
@@ -124,6 +124,16 @@
                 this.isBig = false;
                 this.enteringCastle = false;
                 this.castleEntryProgress = 0;
+                this.fireballCooldown = 0;
+            }
+
+            shootFireball() {
+                if (this.fireballCooldown > 0 || !this.isBig) return;
+
+                const fireballX = this.direction === 1 ? this.x + this.width : this.x;
+                const fireballY = this.y + this.height / 2;
+                fireballs.push(new Fireball(fireballX, fireballY, this.direction));
+                this.fireballCooldown = 30; // Cooldown frames
             }
 
             draw() {
@@ -135,12 +145,12 @@
                     this.animationFrame += 0.2;
                 }
 
-                const legOffset = Math.sin(this.animationFrame) * 4;
-                const armOffset = Math.sin(this.animationFrame + Math.PI) * 3;
+                const legOffset = Math.sin(this.animationFrame) * 5;
+                const armOffset = Math.sin(this.animationFrame + Math.PI) * 4;
 
                 // Scale factor for big Mario
-                const scale = this.isBig ? 1.5 : 1;
-                const yOffset = this.isBig ? -16 : 0; // Shift up when big
+                const scale = this.isBig ? 1.4 : 1;
+                const yOffset = this.isBig ? -12 : 0;
 
                 ctx.save();
 
@@ -163,74 +173,177 @@
                     ctx.translate(-(screenX + this.width / 2), -(screenY + this.height));
                 }
 
-                // Hat (bigger when powered up)
-                const hatScale = this.isBig ? 2 : 1;
-                const hatYOffset = this.isBig ? -10 : 0; // Move up when bigger
+                // Hat (red cap) - bigger when powered up
+                const hatScale = this.isBig ? 1.8 : 1;
                 ctx.fillStyle = this.color;
-                ctx.fillRect(screenX + 6 - (hatScale - 1) * 10, screenY + 4 + yOffset + hatYOffset, 20 * hatScale, 8 * hatScale);
-                ctx.fillRect(screenX + 4 - (hatScale - 1) * 10, screenY + 8 + yOffset + hatYOffset + (8 * (hatScale - 1)), 5 * hatScale, 4 * hatScale); // Brim
+                ctx.beginPath();
+                ctx.ellipse(screenX + 16, screenY + 6 + yOffset, 10 * hatScale, 7 * hatScale, 0, 0, Math.PI * 2);
+                ctx.fill();
 
-                // Head (skin)
+                // Hat brim
+                ctx.beginPath();
+                ctx.ellipse(screenX + 16, screenY + 10 + yOffset, 12 * hatScale, 4 * hatScale, 0, 0, Math.PI);
+                ctx.fill();
+
+                // Hat badge (M)
+                ctx.fillStyle = '#fff';
+                ctx.font = `bold ${10 * hatScale}px Arial`;
+                ctx.fillText('M', screenX + 13, screenY + 9 + yOffset);
+
+                // Head (round, skin color)
                 ctx.fillStyle = '#ffcc99';
-                ctx.fillRect(screenX + 8, screenY + 8 + yOffset, 16, 12);
+                ctx.beginPath();
+                ctx.arc(screenX + 16, screenY + 18 + yOffset, 9, 0, Math.PI * 2);
+                ctx.fill();
 
-                // Eyes (sideways view - only show one eye)
+                // Ear
+                ctx.beginPath();
+                ctx.arc(screenX + 24, screenY + 18 + yOffset, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Eye (sideways view)
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 20, screenY + 16 + yOffset, 4, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#4169E1';
+                ctx.beginPath();
+                ctx.arc(screenX + 21, screenY + 16 + yOffset, 2, 0, Math.PI * 2);
+                ctx.fill();
+
                 ctx.fillStyle = '#000';
-                ctx.fillRect(screenX + 18, screenY + 12 + yOffset, 4, 4);
+                ctx.beginPath();
+                ctx.arc(screenX + 22, screenY + 16 + yOffset, 1.5, 0, Math.PI * 2);
+                ctx.fill();
 
-                // Mustache
-                ctx.fillStyle = '#000';
-                ctx.fillRect(screenX + 16, screenY + 17 + yOffset, 10, 3);
+                // Eyebrow
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(screenX + 17, screenY + 13 + yOffset);
+                ctx.lineTo(screenX + 23, screenY + 13 + yOffset);
+                ctx.stroke();
 
-                // Shirt/Body
+                // Nose
+                ctx.fillStyle = '#ffaa88';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 23, screenY + 19 + yOffset, 3, 4, 0.3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Mustache (iconic!)
+                ctx.fillStyle = '#4a2511';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 20, screenY + 22 + yOffset, 7, 3, 0, 0, Math.PI);
+                ctx.fill();
+
+                // Sideburns
+                ctx.fillStyle = '#4a2511';
+                ctx.fillRect(screenX + 10, screenY + 16 + yOffset, 2, 4);
+
+                // Body/Shirt (red)
                 ctx.fillStyle = this.color;
-                ctx.fillRect(screenX + 8, screenY + 20 + yOffset, 16, 8);
+                ctx.beginPath();
+                ctx.roundRect(screenX + 10, screenY + 24 + yOffset, 14, 10, 2);
+                ctx.fill();
 
-                // Overalls
-                ctx.fillStyle = '#0000ff';
-                ctx.fillRect(screenX + 8, screenY + 28 + yOffset, 16, 12);
+                // Overalls (blue)
+                ctx.fillStyle = '#1E90FF';
+                ctx.beginPath();
+                ctx.roundRect(screenX + 9, screenY + 32 + yOffset, 16, 12, [4, 4, 0, 0]);
+                ctx.fill();
 
-                // Arm (front - shows when hitting blocks)
+                // Overalls straps
+                ctx.fillStyle = '#1E90FF';
+                ctx.fillRect(screenX + 12, screenY + 26 + yOffset, 3, 8);
+                ctx.fillRect(screenX + 18, screenY + 26 + yOffset, 3, 8);
+
+                // Yellow buttons
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.arc(screenX + 13, screenY + 28 + yOffset, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(screenX + 19, screenY + 28 + yOffset, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Arms
                 ctx.fillStyle = this.color;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 5;
+                ctx.lineCap = 'round';
+
                 if (!this.onGround) {
                     // Arm up when jumping
-                    ctx.fillRect(screenX + 24, screenY + 18 + yOffset, 6, 4);
-                    ctx.fillRect(screenX + 26, screenY + 14 + yOffset, 4, 4);
+                    ctx.beginPath();
+                    ctx.moveTo(screenX + 24, screenY + 28 + yOffset);
+                    ctx.lineTo(screenX + 28, screenY + 20 + yOffset);
+                    ctx.stroke();
+
                     // Hand
                     ctx.fillStyle = '#ffcc99';
-                    ctx.fillRect(screenX + 26, screenY + 12 + yOffset, 4, 3);
+                    ctx.beginPath();
+                    ctx.arc(screenX + 28, screenY + 18 + yOffset, 3, 0, Math.PI * 2);
+                    ctx.fill();
                 } else {
-                    // Arm swinging when running
-                    ctx.fillRect(screenX + 24, screenY + 22 + yOffset + armOffset, 6, 8);
-                    // Hand
+                    // Front arm swinging
+                    ctx.beginPath();
+                    ctx.moveTo(screenX + 24, screenY + 28 + yOffset);
+                    ctx.lineTo(screenX + 26, screenY + 36 + yOffset + armOffset);
+                    ctx.stroke();
+
+                    // Front hand
                     ctx.fillStyle = '#ffcc99';
-                    ctx.fillRect(screenX + 24, screenY + 30 + yOffset + armOffset, 6, 4);
+                    ctx.beginPath();
+                    ctx.arc(screenX + 26, screenY + 38 + yOffset + armOffset, 3, 0, Math.PI * 2);
+                    ctx.fill();
                 }
 
-                // Arm (back)
+                // Back arm
                 ctx.fillStyle = this.color;
-                ctx.fillRect(screenX + 2, screenY + 22 + yOffset - armOffset, 6, 8);
+                ctx.beginPath();
+                ctx.moveTo(screenX + 10, screenY + 28 + yOffset);
+                ctx.lineTo(screenX + 6, screenY + 36 + yOffset - armOffset);
+                ctx.stroke();
 
                 // Legs with running animation
-                ctx.fillStyle = '#0000ff';
+                ctx.fillStyle = '#1E90FF';
+                ctx.lineWidth = 6;
 
                 // Front leg
-                ctx.fillRect(screenX + 16, screenY + 40 + yOffset + legOffset, 6, 8);
-                // Front shoe
-                ctx.fillStyle = '#8B4513';
-                ctx.fillRect(screenX + 16, screenY + 44 + yOffset + legOffset, 8, 4);
+                ctx.beginPath();
+                ctx.moveTo(screenX + 18, screenY + 43 + yOffset);
+                ctx.lineTo(screenX + 18, screenY + 48 + yOffset + legOffset);
+                ctx.stroke();
 
                 // Back leg
-                ctx.fillStyle = '#0000ff';
-                ctx.fillRect(screenX + 10, screenY + 40 + yOffset - legOffset, 6, 8);
-                // Back shoe
+                ctx.beginPath();
+                ctx.moveTo(screenX + 14, screenY + 43 + yOffset);
+                ctx.lineTo(screenX + 12, screenY + 48 + yOffset - legOffset);
+                ctx.stroke();
+
+                // Shoes (brown boots)
                 ctx.fillStyle = '#8B4513';
-                ctx.fillRect(screenX + 8, screenY + 44 + yOffset - legOffset, 8, 4);
+
+                // Front shoe
+                ctx.beginPath();
+                ctx.ellipse(screenX + 20, screenY + 48 + yOffset + legOffset, 6, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Back shoe
+                ctx.beginPath();
+                ctx.ellipse(screenX + 11, screenY + 48 + yOffset - legOffset, 6, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
 
                 ctx.restore();
             }
 
             update() {
+                // Decrease fireball cooldown
+                if (this.fireballCooldown > 0) {
+                    this.fireballCooldown--;
+                }
+
                 // Don't update if sliding on flag
                 if (this.slidingFlag) {
                     return;
@@ -995,6 +1108,112 @@
             }
         }
 
+        // Fireball class
+        class Fireball {
+            constructor(x, y, direction) {
+                this.x = x;
+                this.y = y;
+                this.width = 12;
+                this.height = 12;
+                this.velocityX = direction * 8;
+                this.velocityY = -3;
+                this.bounces = 0;
+                this.maxBounces = 3;
+                this.active = true;
+                this.animationFrame = 0;
+            }
+
+            draw() {
+                if (!this.active) return;
+
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
+                // Rotating fireball effect
+                this.animationFrame += 0.3;
+                const rotation = this.animationFrame;
+
+                ctx.save();
+                ctx.translate(screenX + this.width / 2, screenY + this.height / 2);
+                ctx.rotate(rotation);
+
+                // Outer glow
+                const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 8);
+                gradient.addColorStop(0, '#ffff00');
+                gradient.addColorStop(0.5, '#ff6600');
+                gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(0, 0, 8, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Core
+                ctx.fillStyle = '#ffff00';
+                ctx.beginPath();
+                ctx.arc(0, 0, 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Flames
+                ctx.fillStyle = '#ff4500';
+                for (let i = 0; i < 4; i++) {
+                    const angle = (Math.PI / 2) * i + rotation;
+                    const flameX = Math.cos(angle) * 5;
+                    const flameY = Math.sin(angle) * 5;
+                    ctx.beginPath();
+                    ctx.arc(flameX, flameY, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+
+            update() {
+                if (!this.active) return;
+
+                // Apply gravity
+                this.velocityY += GRAVITY * 0.7;
+
+                // Update position
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+
+                // Check collision with platforms (bounce)
+                platforms.forEach(platform => {
+                    if (this.checkCollision(platform)) {
+                        if (this.velocityY > 0 && this.y + this.height - this.velocityY <= platform.y) {
+                            this.y = platform.y - this.height;
+                            this.velocityY = -6; // Bounce
+                            this.bounces++;
+                            if (this.bounces >= this.maxBounces) {
+                                this.active = false;
+                            }
+                        }
+                    }
+                });
+
+                // Remove if off screen or fell
+                if (this.x < camera.x - 100 || this.x > camera.x + canvas.width + 100 || this.y > 700) {
+                    this.active = false;
+                }
+            }
+
+            checkCollision(platform) {
+                return this.x < platform.x + platform.width &&
+                       this.x + this.width > platform.x &&
+                       this.y < platform.y + platform.height &&
+                       this.y + this.height > platform.y;
+            }
+
+            checkEnemyHit(enemy) {
+                if (!this.active || enemy.defeated) return false;
+
+                return this.x < enemy.x + enemy.width &&
+                       this.x + this.width > enemy.x &&
+                       this.y < enemy.y + enemy.height &&
+                       this.y + this.height > enemy.y;
+            }
+        }
+
         // Question Block class
         class QuestionBlock {
             constructor(x, y, hasMushroom = false) {
@@ -1227,6 +1446,9 @@
         // Create mushrooms array
         const mushrooms = [];
 
+        // Create fireballs array
+        const fireballs = [];
+
         // Create Goombas throughout the level
         const goombas = [
             new Goomba(600, 500),
@@ -1252,6 +1474,10 @@
             keys[e.key] = true;
             if (e.key === 'r' || e.key === 'R') {
                 location.reload();
+            }
+            // Shoot fireball with 'X' key (only when big)
+            if (e.key === 'x' || e.key === 'X') {
+                mario.shootFireball();
             }
             // Toggle fullscreen with 'I' key
             if (e.key === 'i' || e.key === 'I') {
@@ -1352,6 +1578,24 @@
                 }
                 goomba.draw();
             });
+
+            // Update and draw fireballs
+            fireballs.forEach(fireball => {
+                fireball.update();
+
+                // Check fireball collision with goombas
+                goombas.forEach(goomba => {
+                    if (fireball.checkEnemyHit(goomba)) {
+                        goomba.defeated = true;
+                        fireball.active = false;
+                        score += 100; // Bonus for fireball kill
+                    }
+                });
+
+                fireball.draw();
+            });
+            // Remove inactive fireballs
+            fireballs.splice(0, fireballs.length, ...fireballs.filter(f => f.active));
 
             // Draw castle
             castle.draw();
