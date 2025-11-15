@@ -105,6 +105,7 @@
         let gameStartTime = Date.now();
         let gameTime = 0;
         let marioInCastle = false;
+        let isFullscreen = false;
 
         // Player class
         class Player {
@@ -119,51 +120,94 @@
                 this.onGround = false;
                 this.direction = 1;
                 this.slidingFlag = false;
+                this.animationFrame = 0;
+                this.isBig = false;
             }
 
             draw() {
                 const screenX = this.x - camera.x;
                 const screenY = this.y - camera.y;
 
-                // Body (overalls)
-                ctx.fillStyle = '#0000ff';
-                ctx.fillRect(screenX + 8, screenY + 20, 16, 20);
+                // Update animation frame when moving
+                if (Math.abs(this.velocityX) > 0 && this.onGround) {
+                    this.animationFrame += 0.2;
+                }
+
+                const legOffset = Math.sin(this.animationFrame) * 4;
+                const armOffset = Math.sin(this.animationFrame + Math.PI) * 3;
+
+                ctx.save();
+
+                // Flip horizontally if moving left
+                if (this.direction === -1) {
+                    ctx.translate(screenX + this.width, screenY);
+                    ctx.scale(-1, 1);
+                    ctx.translate(-screenX, -screenY);
+                }
+
+                // Hat
+                ctx.fillStyle = this.color;
+                ctx.fillRect(screenX + 6, screenY + 4, 20, 8);
+                ctx.fillRect(screenX + 4, screenY + 8, 5, 4); // Brim
 
                 // Head (skin)
                 ctx.fillStyle = '#ffcc99';
                 ctx.fillRect(screenX + 8, screenY + 8, 16, 12);
 
-                // Hat
-                ctx.fillStyle = this.color;
-                ctx.fillRect(screenX + 6, screenY + 4, 20, 8);
-
-                // Shirt under overalls
-                ctx.fillStyle = this.color;
-                ctx.fillRect(screenX + 8, screenY + 20, 16, 6);
-
-                // Legs
-                ctx.fillStyle = '#0000ff';
-                ctx.fillRect(screenX + 10, screenY + 40, 6, 8);
-                ctx.fillRect(screenX + 18, screenY + 40, 6, 8);
-
-                // Shoes
-                ctx.fillStyle = '#8B4513';
-                ctx.fillRect(screenX + 8, screenY + 44, 8, 4);
-                ctx.fillRect(screenX + 16, screenY + 44, 8, 4);
-
-                // Eyes
+                // Eyes (sideways view - only show one eye)
                 ctx.fillStyle = '#000';
-                ctx.fillRect(screenX + 10, screenY + 12, 3, 3);
-                ctx.fillRect(screenX + 19, screenY + 12, 3, 3);
+                ctx.fillRect(screenX + 18, screenY + 12, 4, 4);
 
                 // Mustache
                 ctx.fillStyle = '#000';
-                ctx.fillRect(screenX + 8, screenY + 18, 16, 2);
+                ctx.fillRect(screenX + 16, screenY + 17, 10, 3);
 
-                // Arms
+                // Shirt/Body
                 ctx.fillStyle = this.color;
-                ctx.fillRect(screenX + 4, screenY + 24, 4, 10);
-                ctx.fillRect(screenX + 24, screenY + 24, 4, 10);
+                ctx.fillRect(screenX + 8, screenY + 20, 16, 8);
+
+                // Overalls
+                ctx.fillStyle = '#0000ff';
+                ctx.fillRect(screenX + 8, screenY + 28, 16, 12);
+
+                // Arm (front - shows when hitting blocks)
+                ctx.fillStyle = this.color;
+                if (!this.onGround) {
+                    // Arm up when jumping
+                    ctx.fillRect(screenX + 24, screenY + 18, 6, 4);
+                    ctx.fillRect(screenX + 26, screenY + 14, 4, 4);
+                    // Hand
+                    ctx.fillStyle = '#ffcc99';
+                    ctx.fillRect(screenX + 26, screenY + 12, 4, 3);
+                } else {
+                    // Arm swinging when running
+                    ctx.fillRect(screenX + 24, screenY + 22 + armOffset, 6, 8);
+                    // Hand
+                    ctx.fillStyle = '#ffcc99';
+                    ctx.fillRect(screenX + 24, screenY + 30 + armOffset, 6, 4);
+                }
+
+                // Arm (back)
+                ctx.fillStyle = this.color;
+                ctx.fillRect(screenX + 2, screenY + 22 - armOffset, 6, 8);
+
+                // Legs with running animation
+                ctx.fillStyle = '#0000ff';
+
+                // Front leg
+                ctx.fillRect(screenX + 16, screenY + 40 + legOffset, 6, 8);
+                // Front shoe
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(screenX + 16, screenY + 44 + legOffset, 8, 4);
+
+                // Back leg
+                ctx.fillStyle = '#0000ff';
+                ctx.fillRect(screenX + 10, screenY + 40 - legOffset, 6, 8);
+                // Back shoe
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(screenX + 8, screenY + 44 - legOffset, 8, 4);
+
+                ctx.restore();
             }
 
             update() {
