@@ -67,7 +67,7 @@
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div id="info">
             <div>Arrow Keys: Move Left/Right | Space: Jump</div>
-            <div>Fall in pits: Lose 1 life + 50 coins | You have 3 lives!</div>
+            <div>Hit question blocks from below for coins!</div>
         </div>
         <div class="controls">Press R to restart | Reach the flag at the end!</div>
     </div>
@@ -98,6 +98,7 @@
         let levelComplete = false;
         let lives = 3;
         let deaths = 0;
+        let lastSafePosition = { x: 100, y: 100 };
 
         // Player class
         class Player {
@@ -192,25 +193,16 @@
                 if (this.x < 0) this.x = 0;
                 if (this.x + this.width > LEVEL_WIDTH) this.x = LEVEL_WIDTH - this.width;
 
-                // Reset if fell off screen (pit)
+                // Reset if fell off screen (pit) - continue from same location
                 if (this.y > 700) {
-                    // Lose a life
-                    if (lives > 0) {
-                        lives--;
-                    }
+                    // Track deaths for statistics
                     deaths++;
 
-                    // Lose coins as penalty
-                    score = Math.max(0, score - 50);
-
-                    // Respawn at safe position (start or last checkpoint)
-                    this.x = 100;
-                    this.y = 100;
+                    // Respawn at last safe position
+                    this.x = lastSafePosition.x;
+                    this.y = lastSafePosition.y;
                     this.velocityX = 0;
                     this.velocityY = 0;
-
-                    // Reset camera
-                    camera.x = 0;
                 }
 
                 // Check collision with platforms
@@ -222,6 +214,10 @@
                             this.y = platform.y - this.height;
                             this.velocityY = 0;
                             this.onGround = true;
+
+                            // Update last safe position when on ground
+                            lastSafePosition.x = this.x;
+                            lastSafePosition.y = this.y;
                         }
                         // Bottom collision (hitting head)
                         else if (this.velocityY < 0 && this.y - this.velocityY >= platform.y + platform.height) {
@@ -252,6 +248,10 @@
                             this.y = block.y - this.height;
                             this.velocityY = 0;
                             this.onGround = true;
+
+                            // Update last safe position when on ground
+                            lastSafePosition.x = this.x;
+                            lastSafePosition.y = this.y;
                         }
                     }
                 });
