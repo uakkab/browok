@@ -974,15 +974,28 @@
                 this.squashed = false;
                 this.squashTimer = 0;
                 this.animationFrame = 0;
+                this.flipped = false; // Hit by fireball
+                this.flipRotation = 0;
             }
 
             draw() {
-                if (this.defeated && this.squashTimer > 30) return; // Don't draw after squashed
+                if (this.defeated && this.squashTimer > 30 && !this.flipped) return; // Don't draw after squashed
+                if (this.flipped && this.y > 700) return; // Don't draw if flipped off screen
 
                 const screenX = this.x - camera.x;
                 const screenY = this.y - camera.y;
 
-                if (this.squashed) {
+                ctx.save();
+
+                if (this.flipped) {
+                    // Rotate and flip when hit by fireball
+                    ctx.translate(screenX + this.width / 2, screenY + this.height / 2);
+                    ctx.rotate(this.flipRotation);
+                    ctx.scale(1, -1); // Flip upside down
+                    ctx.translate(-(screenX + this.width / 2), -(screenY + this.height / 2));
+                }
+
+                if (this.squashed && !this.flipped) {
                     // Draw squashed Goomba (flat)
                     ctx.fillStyle = '#8B4513';
                     ctx.fillRect(screenX, screenY + this.height - 8, this.width, 8);
@@ -1015,11 +1028,27 @@
                     ctx.fillRect(screenX + 6 + footOffset, screenY + this.height - 6, 8, 6);
                     ctx.fillRect(screenX + 18 - footOffset, screenY + this.height - 6, 8, 6);
                 }
+
+                ctx.restore();
             }
 
             update() {
-                if (this.squashed) {
+                if (this.squashed && !this.flipped) {
                     this.squashTimer++;
+                    return;
+                }
+
+                if (this.flipped) {
+                    // Fly off screen when hit by fireball
+                    this.velocityY += GRAVITY;
+                    this.y += this.velocityY;
+                    this.x += this.velocityX * 0.5; // Slight horizontal movement
+                    this.flipRotation += 0.2; // Spin while falling
+
+                    // Mark as defeated when off screen
+                    if (this.y > 700) {
+                        this.defeated = true;
+                    }
                     return;
                 }
 
@@ -1083,7 +1112,7 @@
             }
 
             checkPlayerCollision(player) {
-                if (this.defeated) return null;
+                if (this.defeated || this.flipped) return null;
 
                 const overlap = player.x < this.x + this.width &&
                                player.x + player.width > this.x &&
@@ -1105,6 +1134,13 @@
                 this.defeated = true;
                 this.squashed = true;
                 this.squashTimer = 0;
+            }
+
+            flipOff() {
+                // Hit by fireball - flip and fly off screen
+                this.flipped = true;
+                this.velocityY = -10; // Launch upward
+                this.velocityX = this.velocityX * 2; // Increase horizontal speed
             }
         }
 
@@ -1586,7 +1622,7 @@
                 // Check fireball collision with goombas
                 goombas.forEach(goomba => {
                     if (fireball.checkEnemyHit(goomba)) {
-                        goomba.defeated = true;
+                        goomba.flipOff(); // Flip Goomba off screen like in Mario!
                         fireball.active = false;
                         score += 100; // Bonus for fireball kill
                     }
