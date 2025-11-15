@@ -102,6 +102,9 @@
         let flagReached = false;
         let marioRunning = false;
         let fireworks = [];
+        let gameStartTime = Date.now();
+        let gameTime = 0;
+        let marioInCastle = false;
 
         // Player class
         class Player {
@@ -456,6 +459,134 @@
             }
         }
 
+        // Bowser Flag class - flag slides down when touched
+        class BowserFlag {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 12;
+                this.height = 250;
+                this.flagWidth = 60;
+                this.flagHeight = 40;
+                this.waveOffset = 0;
+                this.flagY = 10; // Flag starts at top
+                this.isSliding = false;
+                this.slideSpeed = 3;
+                this.playerSliding = null;
+            }
+
+            draw() {
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
+                // Pole base
+                ctx.fillStyle = '#888';
+                ctx.fillRect(screenX - 8, screenY + this.height, 28, 15);
+
+                // Pole shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.fillRect(screenX + 2, screenY + 2, this.width, this.height);
+
+                // Main pole
+                ctx.fillStyle = '#ddd';
+                ctx.fillRect(screenX, screenY, this.width, this.height);
+
+                // Pole highlights
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(screenX + 2, screenY, 3, this.height);
+
+                // Pole segments
+                ctx.strokeStyle = '#999';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 5; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(screenX, screenY + (i * 50));
+                    ctx.lineTo(screenX + this.width, screenY + (i * 50));
+                    ctx.stroke();
+                }
+
+                // Slide flag down if activated
+                if (this.isSliding && this.flagY < this.height - this.flagHeight - 20) {
+                    this.flagY += this.slideSpeed;
+                }
+
+                // Waving flag effect (only if not sliding)
+                const wave = this.isSliding ? 0 : Math.sin(this.waveOffset) * 3;
+                if (!this.isSliding) {
+                    this.waveOffset += 0.1;
+                }
+
+                // Flag shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.fillRect(screenX + this.width + 2 + wave, screenY + this.flagY + 2, this.flagWidth, this.flagHeight);
+
+                // Main flag (Bowser colors - black background)
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(screenX + this.width + wave, screenY + this.flagY, this.flagWidth, this.flagHeight);
+
+                // Bowser emblem - red circle
+                ctx.fillStyle = '#ff3333';
+                ctx.beginPath();
+                ctx.arc(screenX + this.width + wave + 30, screenY + this.flagY + 20, 14, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Bowser symbol - spikes/horns
+                ctx.fillStyle = '#ffaa00';
+                ctx.beginPath();
+                ctx.moveTo(screenX + this.width + wave + 30, screenY + this.flagY + 10);
+                ctx.lineTo(screenX + this.width + wave + 25, screenY + this.flagY + 16);
+                ctx.lineTo(screenX + this.width + wave + 30, screenY + this.flagY + 14);
+                ctx.lineTo(screenX + this.width + wave + 35, screenY + this.flagY + 16);
+                ctx.fill();
+
+                // Flag border
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(screenX + this.width + wave, screenY + this.flagY, this.flagWidth, this.flagHeight);
+
+                // Pole top ball
+                ctx.fillStyle = '#ffff00';
+                ctx.beginPath();
+                ctx.arc(screenX + this.width / 2, screenY - 5, 8, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#ffaa00';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            checkReached(player) {
+                return player.x + player.width > this.x && player.x < this.x + this.width + this.flagWidth;
+            }
+
+            startSliding(player) {
+                if (!this.isSliding) {
+                    this.isSliding = true;
+                    this.playerSliding = player;
+                }
+            }
+
+            updatePlayerSliding() {
+                if (this.playerSliding && this.isSliding) {
+                    // Position player on pole
+                    this.playerSliding.x = this.x + this.width / 2 - this.playerSliding.width / 2;
+                    this.playerSliding.y = this.y + this.flagY + this.flagHeight / 2;
+                    this.playerSliding.velocityX = 0;
+                    this.playerSliding.velocityY = 0;
+                    this.playerSliding.slidingFlag = true;
+
+                    // Stop sliding when reached bottom
+                    if (this.flagY >= this.height - this.flagHeight - 20) {
+                        this.playerSliding.slidingFlag = false;
+                        this.playerSliding = null;
+                    }
+                }
+            }
+
+            isAtBottom() {
+                return this.flagY >= this.height - this.flagHeight - 20;
+            }
+        }
+
         // Castle class
         class Castle {
             constructor(x, y) {
@@ -463,6 +594,10 @@
                 this.y = y;
                 this.width = 200;
                 this.height = 180;
+                this.doorX = 70;
+                this.doorY = 120;
+                this.doorWidth = 60;
+                this.doorHeight = 60;
             }
 
             draw() {
@@ -510,6 +645,16 @@
                 ctx.lineWidth = 2;
                 ctx.strokeRect(screenX + 30, screenY + 80, 20, 25);
                 ctx.strokeRect(screenX + 150, screenY + 80, 20, 25);
+            }
+
+            checkEntry(player) {
+                // Check if player is in front of the door
+                const doorAbsoluteX = this.x + this.doorX;
+                const doorAbsoluteY = this.y + this.doorY;
+
+                return player.x + player.width > doorAbsoluteX &&
+                       player.x < doorAbsoluteX + this.doorWidth &&
+                       player.y + player.height >= doorAbsoluteY + this.doorHeight - 10;
             }
         }
 
@@ -716,15 +861,15 @@
             new Platform(1800, 500, 80, 20, '#ff8800'),
             new Platform(3100, 500, 80, 20, '#ff8800'),
 
-            // Stairs leading to flag (at end of level)
-            new Platform(5400, 530, 60, 20, '#00aa00'),
-            new Platform(5460, 510, 60, 40, '#00aa00'),
-            new Platform(5520, 490, 60, 60, '#00aa00'),
-            new Platform(5580, 470, 60, 80, '#00aa00'),
-            new Platform(5640, 450, 60, 100, '#00aa00'),
-            new Platform(5700, 430, 60, 120, '#00aa00'),
-            new Platform(5760, 410, 60, 140, '#00aa00'),
-            new Platform(5820, 390, 60, 160, '#00aa00'),
+            // Stairs leading to flags (repositioned before flags)
+            new Platform(5200, 530, 60, 20, '#00aa00'),
+            new Platform(5260, 510, 60, 40, '#00aa00'),
+            new Platform(5320, 490, 60, 60, '#00aa00'),
+            new Platform(5380, 470, 60, 80, '#00aa00'),
+            new Platform(5440, 450, 60, 100, '#00aa00'),
+            new Platform(5500, 430, 60, 120, '#00aa00'),
+            new Platform(5560, 410, 60, 140, '#00aa00'),
+            new Platform(5620, 390, 60, 160, '#00aa00'),
         ];
 
         // Create many coins throughout the level
@@ -776,11 +921,14 @@
             new QuestionBlock(3450, 250),
         ];
 
-        // Create finish flag at the end
-        const finishFlag = new Flag(LEVEL_WIDTH - 200, 300);
+        // Create Bowser flag (slides down when touched)
+        const bowserFlag = new BowserFlag(5700, 300);
 
-        // Create castle after the flag
-        const castle = new Castle(LEVEL_WIDTH - 100, 370);
+        // Create Mario flag (rises up when both flags touched)
+        const marioFlag = new Flag(5820, 300);
+
+        // Create castle at the end
+        const castle = new Castle(LEVEL_WIDTH - 250, 370);
 
         // Event listeners
         window.addEventListener('keydown', (e) => {
@@ -835,32 +983,53 @@
             // Draw castle
             castle.draw();
 
-            // Draw finish flag
-            finishFlag.draw();
+            // Draw Bowser flag
+            bowserFlag.draw();
 
-            // Check if player reached flag and start rising
-            if (finishFlag.checkReached(mario) && !flagReached) {
-                flagReached = true;
-                finishFlag.startRising();
+            // Draw Mario flag
+            marioFlag.draw();
+
+            // Check if player reached Bowser flag and start sliding
+            if (bowserFlag.checkReached(mario) && !bowserFlag.isSliding) {
+                bowserFlag.startSliding(mario);
             }
 
-            // When flag reaches top, start Mario auto-run
-            if (flagReached && finishFlag.isAtTop() && !marioRunning) {
+            // Update Bowser flag sliding animation
+            bowserFlag.updatePlayerSliding();
+
+            // When Bowser flag reaches bottom, start Mario flag rising
+            if (bowserFlag.isAtBottom() && !marioFlag.isRising) {
+                marioFlag.startRising();
+            }
+
+            // Check if player reached Mario flag and both flags completed
+            if (marioFlag.checkReached(mario) && !flagReached && bowserFlag.isAtBottom()) {
+                flagReached = true;
+            }
+
+            // When Mario flag reaches top, start Mario auto-run
+            if (flagReached && marioFlag.isAtTop() && !marioRunning) {
                 marioRunning = true;
             }
 
-            // Check if Mario reached castle
-            if (marioRunning && mario.x > LEVEL_WIDTH - 250 && !levelComplete) {
+            // Check if Mario entered castle
+            if (marioRunning && castle.checkEntry(mario) && !marioInCastle) {
+                marioInCastle = true;
+            }
+
+            // When Mario enters castle, trigger level complete
+            if (marioInCastle && !levelComplete) {
                 levelComplete = true;
+                gameTime = Math.floor((Date.now() - gameStartTime) / 1000);
 
                 // Create fireworks
-                for (let i = 0; i < 5; i++) {
+                for (let i = 0; i < 8; i++) {
                     setTimeout(() => {
                         fireworks.push(new Firework(
-                            LEVEL_WIDTH - 300 + Math.random() * 200,
-                            200 + Math.random() * 150
+                            LEVEL_WIDTH - 400 + Math.random() * 300,
+                            150 + Math.random() * 200
                         ));
-                    }, i * 500);
+                    }, i * 400);
                 }
             }
 
@@ -871,14 +1040,24 @@
                 fw.draw();
             });
 
-            // Update and draw player
+            // Update and draw player (hide if in castle)
             mario.update();
-            mario.draw();
+            if (!marioInCastle) {
+                mario.draw();
+            }
 
             // Draw UI
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 24px Courier New';
             ctx.fillText(`Score: ${score}`, 20, 30);
+
+            // Draw timer
+            if (!levelComplete) {
+                const currentTime = Math.floor((Date.now() - gameStartTime) / 1000);
+                ctx.fillText(`Time: ${currentTime}s`, canvas.width - 200, 60);
+            } else {
+                ctx.fillText(`Time: ${gameTime}s`, canvas.width - 200, 60);
+            }
 
             // Draw lives (hearts)
             ctx.fillText(`Lives: `, 20, 60);
@@ -907,9 +1086,10 @@
                 ctx.fillStyle = '#fff';
                 ctx.font = 'bold 24px Courier New';
                 ctx.fillText(`Final Score: ${score}`, canvas.width / 2 - 120, canvas.height / 2 + 50);
-                ctx.fillText(`Deaths: ${deaths}`, canvas.width / 2 - 70, canvas.height / 2 + 80);
-                ctx.fillText(`Lives Remaining: ${lives}`, canvas.width / 2 - 140, canvas.height / 2 + 110);
-                ctx.fillText('Press R to restart', canvas.width / 2 - 140, canvas.height / 2 + 150);
+                ctx.fillText(`Completion Time: ${gameTime}s`, canvas.width / 2 - 150, canvas.height / 2 + 80);
+                ctx.fillText(`Deaths: ${deaths}`, canvas.width / 2 - 70, canvas.height / 2 + 110);
+                ctx.fillText(`Lives Remaining: ${lives}`, canvas.width / 2 - 140, canvas.height / 2 + 140);
+                ctx.fillText('Press R to restart', canvas.width / 2 - 140, canvas.height / 2 + 180);
             } else {
                 requestAnimationFrame(gameLoop);
             }
