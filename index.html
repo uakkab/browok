@@ -66,10 +66,10 @@
         </div>
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div id="info">
-            <div>Arrow Keys: Move Left/Right | Space: Jump</div>
+            <div>Arrow Keys: Move Left/Right | Space: Jump | I: Fullscreen</div>
             <div>Hit question blocks from below for coins!</div>
         </div>
-        <div class="controls">Press R to restart | Reach the flag at the end!</div>
+        <div class="controls">Press R to restart | Reach both flags at the end!</div>
     </div>
 
     <script>
@@ -122,6 +122,8 @@
                 this.slidingFlag = false;
                 this.animationFrame = 0;
                 this.isBig = false;
+                this.enteringCastle = false;
+                this.castleEntryProgress = 0;
             }
 
             draw() {
@@ -136,7 +138,16 @@
                 const legOffset = Math.sin(this.animationFrame) * 4;
                 const armOffset = Math.sin(this.animationFrame + Math.PI) * 3;
 
+                // Scale factor for big Mario
+                const scale = this.isBig ? 1.5 : 1;
+                const yOffset = this.isBig ? -16 : 0; // Shift up when big
+
                 ctx.save();
+
+                // Apply fade effect when entering castle
+                if (this.enteringCastle) {
+                    ctx.globalAlpha = Math.max(0, 1 - this.castleEntryProgress);
+                }
 
                 // Flip horizontally if moving left
                 if (this.direction === -1) {
@@ -145,67 +156,74 @@
                     ctx.translate(-screenX, -screenY);
                 }
 
+                // Apply scaling for big Mario
+                if (this.isBig) {
+                    ctx.translate(screenX + this.width / 2, screenY + this.height);
+                    ctx.scale(scale, scale);
+                    ctx.translate(-(screenX + this.width / 2), -(screenY + this.height));
+                }
+
                 // Hat
                 ctx.fillStyle = this.color;
-                ctx.fillRect(screenX + 6, screenY + 4, 20, 8);
-                ctx.fillRect(screenX + 4, screenY + 8, 5, 4); // Brim
+                ctx.fillRect(screenX + 6, screenY + 4 + yOffset, 20, 8);
+                ctx.fillRect(screenX + 4, screenY + 8 + yOffset, 5, 4); // Brim
 
                 // Head (skin)
                 ctx.fillStyle = '#ffcc99';
-                ctx.fillRect(screenX + 8, screenY + 8, 16, 12);
+                ctx.fillRect(screenX + 8, screenY + 8 + yOffset, 16, 12);
 
                 // Eyes (sideways view - only show one eye)
                 ctx.fillStyle = '#000';
-                ctx.fillRect(screenX + 18, screenY + 12, 4, 4);
+                ctx.fillRect(screenX + 18, screenY + 12 + yOffset, 4, 4);
 
                 // Mustache
                 ctx.fillStyle = '#000';
-                ctx.fillRect(screenX + 16, screenY + 17, 10, 3);
+                ctx.fillRect(screenX + 16, screenY + 17 + yOffset, 10, 3);
 
                 // Shirt/Body
                 ctx.fillStyle = this.color;
-                ctx.fillRect(screenX + 8, screenY + 20, 16, 8);
+                ctx.fillRect(screenX + 8, screenY + 20 + yOffset, 16, 8);
 
                 // Overalls
                 ctx.fillStyle = '#0000ff';
-                ctx.fillRect(screenX + 8, screenY + 28, 16, 12);
+                ctx.fillRect(screenX + 8, screenY + 28 + yOffset, 16, 12);
 
                 // Arm (front - shows when hitting blocks)
                 ctx.fillStyle = this.color;
                 if (!this.onGround) {
                     // Arm up when jumping
-                    ctx.fillRect(screenX + 24, screenY + 18, 6, 4);
-                    ctx.fillRect(screenX + 26, screenY + 14, 4, 4);
+                    ctx.fillRect(screenX + 24, screenY + 18 + yOffset, 6, 4);
+                    ctx.fillRect(screenX + 26, screenY + 14 + yOffset, 4, 4);
                     // Hand
                     ctx.fillStyle = '#ffcc99';
-                    ctx.fillRect(screenX + 26, screenY + 12, 4, 3);
+                    ctx.fillRect(screenX + 26, screenY + 12 + yOffset, 4, 3);
                 } else {
                     // Arm swinging when running
-                    ctx.fillRect(screenX + 24, screenY + 22 + armOffset, 6, 8);
+                    ctx.fillRect(screenX + 24, screenY + 22 + yOffset + armOffset, 6, 8);
                     // Hand
                     ctx.fillStyle = '#ffcc99';
-                    ctx.fillRect(screenX + 24, screenY + 30 + armOffset, 6, 4);
+                    ctx.fillRect(screenX + 24, screenY + 30 + yOffset + armOffset, 6, 4);
                 }
 
                 // Arm (back)
                 ctx.fillStyle = this.color;
-                ctx.fillRect(screenX + 2, screenY + 22 - armOffset, 6, 8);
+                ctx.fillRect(screenX + 2, screenY + 22 + yOffset - armOffset, 6, 8);
 
                 // Legs with running animation
                 ctx.fillStyle = '#0000ff';
 
                 // Front leg
-                ctx.fillRect(screenX + 16, screenY + 40 + legOffset, 6, 8);
+                ctx.fillRect(screenX + 16, screenY + 40 + yOffset + legOffset, 6, 8);
                 // Front shoe
                 ctx.fillStyle = '#8B4513';
-                ctx.fillRect(screenX + 16, screenY + 44 + legOffset, 8, 4);
+                ctx.fillRect(screenX + 16, screenY + 44 + yOffset + legOffset, 8, 4);
 
                 // Back leg
                 ctx.fillStyle = '#0000ff';
-                ctx.fillRect(screenX + 10, screenY + 40 - legOffset, 6, 8);
+                ctx.fillRect(screenX + 10, screenY + 40 + yOffset - legOffset, 6, 8);
                 // Back shoe
                 ctx.fillStyle = '#8B4513';
-                ctx.fillRect(screenX + 8, screenY + 44 - legOffset, 8, 4);
+                ctx.fillRect(screenX + 8, screenY + 44 + yOffset - legOffset, 8, 4);
 
                 ctx.restore();
             }
@@ -213,6 +231,16 @@
             update() {
                 // Don't update if sliding on flag
                 if (this.slidingFlag) {
+                    return;
+                }
+
+                // Handle castle entry animation
+                if (this.enteringCastle) {
+                    this.castleEntryProgress += 0.02;
+                    // Slowly move forward into the door
+                    this.velocityX = 1;
+                    this.velocityY = 0;
+                    this.x += this.velocityX;
                     return;
                 }
 
@@ -402,8 +430,8 @@
             }
         }
 
-        // Mario Flag class - flag rises when touched
-        class Flag {
+        // Dual Flag Pole class - both Bowser and Mario flags on same pole
+        class DualFlagPole {
             constructor(x, y) {
                 this.x = x;
                 this.y = y;
@@ -412,9 +440,18 @@
                 this.flagWidth = 60;
                 this.flagHeight = 40;
                 this.waveOffset = 0;
-                this.flagY = this.height - this.flagHeight - 10; // Flag starts at bottom
-                this.isRising = false;
+
+                // Bowser flag starts at top, slides down
+                this.bowserFlagY = 10;
+                this.bowserSliding = false;
+
+                // Mario flag starts at bottom, rises up
+                this.marioFlagY = this.height - this.flagHeight - 10;
+                this.marioRising = false;
+
+                this.slideSpeed = 3;
                 this.riseSpeed = 3;
+                this.playerSliding = null;
                 this.reached = false;
             }
 
@@ -448,145 +485,69 @@
                     ctx.stroke();
                 }
 
-                // Raise flag up if activated
-                if (this.isRising && this.flagY > 10) {
-                    this.flagY -= this.riseSpeed;
+                // Slide Bowser flag down if activated
+                if (this.bowserSliding && this.bowserFlagY < this.height - this.flagHeight - 20) {
+                    this.bowserFlagY += this.slideSpeed;
                 }
 
-                // Waving flag effect (only if not rising)
-                const wave = this.isRising ? 0 : Math.sin(this.waveOffset) * 3;
-                if (!this.isRising) {
+                // Raise Mario flag up if activated
+                if (this.marioRising && this.marioFlagY > 10) {
+                    this.marioFlagY -= this.riseSpeed;
+                }
+
+                // Waving flag effect (only if not animating)
+                const wave = (this.bowserSliding || this.marioRising) ? 0 : Math.sin(this.waveOffset) * 3;
+                if (!this.bowserSliding && !this.marioRising) {
                     this.waveOffset += 0.1;
                 }
 
+                // Draw Bowser Flag (top)
                 // Flag shadow
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-                ctx.fillRect(screenX + this.width + 2 + wave, screenY + this.flagY + 2, this.flagWidth, this.flagHeight);
-
-                // Main flag (Mario colors - red background)
-                ctx.fillStyle = '#ff0000';
-                ctx.fillRect(screenX + this.width + wave, screenY + this.flagY, this.flagWidth, this.flagHeight);
-
-                // Mario "M" emblem
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 32px Courier New';
-                ctx.fillText('M', screenX + this.width + wave + 18, screenY + this.flagY + 30);
-
-                // Flag border
-                ctx.strokeStyle = '#cc0000';
-                ctx.lineWidth = 3;
-                ctx.strokeRect(screenX + this.width + wave, screenY + this.flagY, this.flagWidth, this.flagHeight);
-
-                // Pole top ball
-                ctx.fillStyle = '#ffff00';
-                ctx.beginPath();
-                ctx.arc(screenX + this.width / 2, screenY - 5, 8, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = '#ffaa00';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-            }
-
-            checkReached(player) {
-                return player.x + player.width > this.x && player.x < this.x + this.width + this.flagWidth;
-            }
-
-            startRising() {
-                if (!this.isRising) {
-                    this.isRising = true;
-                    this.reached = true;
-                }
-            }
-
-            isAtTop() {
-                return this.flagY <= 10;
-            }
-        }
-
-        // Bowser Flag class - flag slides down when touched
-        class BowserFlag {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.width = 12;
-                this.height = 250;
-                this.flagWidth = 60;
-                this.flagHeight = 40;
-                this.waveOffset = 0;
-                this.flagY = 10; // Flag starts at top
-                this.isSliding = false;
-                this.slideSpeed = 3;
-                this.playerSliding = null;
-            }
-
-            draw() {
-                const screenX = this.x - camera.x;
-                const screenY = this.y - camera.y;
-
-                // Pole base
-                ctx.fillStyle = '#888';
-                ctx.fillRect(screenX - 8, screenY + this.height, 28, 15);
-
-                // Pole shadow
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-                ctx.fillRect(screenX + 2, screenY + 2, this.width, this.height);
-
-                // Main pole
-                ctx.fillStyle = '#ddd';
-                ctx.fillRect(screenX, screenY, this.width, this.height);
-
-                // Pole highlights
-                ctx.fillStyle = '#fff';
-                ctx.fillRect(screenX + 2, screenY, 3, this.height);
-
-                // Pole segments
-                ctx.strokeStyle = '#999';
-                ctx.lineWidth = 2;
-                for (let i = 0; i < 5; i++) {
-                    ctx.beginPath();
-                    ctx.moveTo(screenX, screenY + (i * 50));
-                    ctx.lineTo(screenX + this.width, screenY + (i * 50));
-                    ctx.stroke();
-                }
-
-                // Slide flag down if activated
-                if (this.isSliding && this.flagY < this.height - this.flagHeight - 20) {
-                    this.flagY += this.slideSpeed;
-                }
-
-                // Waving flag effect (only if not sliding)
-                const wave = this.isSliding ? 0 : Math.sin(this.waveOffset) * 3;
-                if (!this.isSliding) {
-                    this.waveOffset += 0.1;
-                }
-
-                // Flag shadow
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-                ctx.fillRect(screenX + this.width + 2 + wave, screenY + this.flagY + 2, this.flagWidth, this.flagHeight);
+                ctx.fillRect(screenX + this.width + 2 + wave, screenY + this.bowserFlagY + 2, this.flagWidth, this.flagHeight);
 
                 // Main flag (Bowser colors - black background)
                 ctx.fillStyle = '#1a1a1a';
-                ctx.fillRect(screenX + this.width + wave, screenY + this.flagY, this.flagWidth, this.flagHeight);
+                ctx.fillRect(screenX + this.width + wave, screenY + this.bowserFlagY, this.flagWidth, this.flagHeight);
 
                 // Bowser emblem - red circle
                 ctx.fillStyle = '#ff3333';
                 ctx.beginPath();
-                ctx.arc(screenX + this.width + wave + 30, screenY + this.flagY + 20, 14, 0, Math.PI * 2);
+                ctx.arc(screenX + this.width + wave + 30, screenY + this.bowserFlagY + 20, 14, 0, Math.PI * 2);
                 ctx.fill();
 
                 // Bowser symbol - spikes/horns
                 ctx.fillStyle = '#ffaa00';
                 ctx.beginPath();
-                ctx.moveTo(screenX + this.width + wave + 30, screenY + this.flagY + 10);
-                ctx.lineTo(screenX + this.width + wave + 25, screenY + this.flagY + 16);
-                ctx.lineTo(screenX + this.width + wave + 30, screenY + this.flagY + 14);
-                ctx.lineTo(screenX + this.width + wave + 35, screenY + this.flagY + 16);
+                ctx.moveTo(screenX + this.width + wave + 30, screenY + this.bowserFlagY + 10);
+                ctx.lineTo(screenX + this.width + wave + 25, screenY + this.bowserFlagY + 16);
+                ctx.lineTo(screenX + this.width + wave + 30, screenY + this.bowserFlagY + 14);
+                ctx.lineTo(screenX + this.width + wave + 35, screenY + this.bowserFlagY + 16);
                 ctx.fill();
 
-                // Flag border
+                // Bowser flag border
                 ctx.strokeStyle = '#ff0000';
                 ctx.lineWidth = 3;
-                ctx.strokeRect(screenX + this.width + wave, screenY + this.flagY, this.flagWidth, this.flagHeight);
+                ctx.strokeRect(screenX + this.width + wave, screenY + this.bowserFlagY, this.flagWidth, this.flagHeight);
+
+                // Draw Mario Flag (bottom)
+                // Flag shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.fillRect(screenX + this.width + 2 + wave, screenY + this.marioFlagY + 2, this.flagWidth, this.flagHeight);
+
+                // Main flag (Mario colors - red background)
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(screenX + this.width + wave, screenY + this.marioFlagY, this.flagWidth, this.flagHeight);
+
+                // Mario "M" emblem
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 32px Courier New';
+                ctx.fillText('M', screenX + this.width + wave + 18, screenY + this.marioFlagY + 30);
+
+                // Mario flag border
+                ctx.strokeStyle = '#cc0000';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(screenX + this.width + wave, screenY + this.marioFlagY, this.flagWidth, this.flagHeight);
 
                 // Pole top ball
                 ctx.fillStyle = '#ffff00';
@@ -603,31 +564,42 @@
             }
 
             startSliding(player) {
-                if (!this.isSliding) {
-                    this.isSliding = true;
+                if (!this.bowserSliding) {
+                    this.bowserSliding = true;
                     this.playerSliding = player;
+                    this.reached = true;
                 }
             }
 
             updatePlayerSliding() {
-                if (this.playerSliding && this.isSliding) {
+                if (this.playerSliding && this.bowserSliding) {
                     // Position player on pole
                     this.playerSliding.x = this.x + this.width / 2 - this.playerSliding.width / 2;
-                    this.playerSliding.y = this.y + this.flagY + this.flagHeight / 2;
+                    this.playerSliding.y = this.y + this.bowserFlagY + this.flagHeight / 2;
                     this.playerSliding.velocityX = 0;
                     this.playerSliding.velocityY = 0;
                     this.playerSliding.slidingFlag = true;
 
                     // Stop sliding when reached bottom
-                    if (this.flagY >= this.height - this.flagHeight - 20) {
+                    if (this.bowserFlagY >= this.height - this.flagHeight - 20) {
                         this.playerSliding.slidingFlag = false;
                         this.playerSliding = null;
                     }
                 }
             }
 
-            isAtBottom() {
-                return this.flagY >= this.height - this.flagHeight - 20;
+            startRising() {
+                if (!this.marioRising) {
+                    this.marioRising = true;
+                }
+            }
+
+            isBowserAtBottom() {
+                return this.bowserFlagY >= this.height - this.flagHeight - 20;
+            }
+
+            isMarioAtTop() {
+                return this.marioFlagY <= 10;
             }
         }
 
@@ -754,9 +726,123 @@
             }
         }
 
+        // Mushroom Power-up class
+        class Mushroom {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 30;
+                this.height = 30;
+                this.velocityX = 2;
+                this.velocityY = -5; // Pop up from block
+                this.collected = false;
+                this.onGround = false;
+                this.appearingOffset = -this.height; // Start hidden in block
+                this.appearing = true;
+            }
+
+            draw() {
+                if (this.collected) return;
+
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y + this.appearingOffset;
+
+                // Mushroom cap (red with white spots)
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath();
+                ctx.arc(screenX + this.width / 2, screenY + 10, 14, Math.PI, 0);
+                ctx.fill();
+                ctx.fillRect(screenX + 1, screenY + 10, this.width - 2, 8);
+
+                // White spots on cap
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(screenX + 8, screenY + 8, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(screenX + 22, screenY + 8, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(screenX + 15, screenY + 14, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Mushroom stem (white)
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(screenX + 10, screenY + 18, 10, 12);
+
+                // Stem outline
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(screenX + 10, screenY + 18, 10, 12);
+            }
+
+            update() {
+                if (this.collected) return;
+
+                // Appearing animation
+                if (this.appearing) {
+                    this.appearingOffset += 1;
+                    if (this.appearingOffset >= 0) {
+                        this.appearingOffset = 0;
+                        this.appearing = false;
+                    }
+                    return;
+                }
+
+                // Apply gravity
+                this.velocityY += GRAVITY;
+
+                // Update position
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+
+                // Check collision with platforms
+                this.onGround = false;
+                platforms.forEach(platform => {
+                    if (this.checkCollision(platform)) {
+                        if (this.velocityY > 0 && this.y + this.height - this.velocityY <= platform.y) {
+                            this.y = platform.y - this.height;
+                            this.velocityY = 0;
+                            this.onGround = true;
+                        }
+                        // Bounce off walls
+                        else if (this.velocityX > 0 && this.x < platform.x) {
+                            this.velocityX = -this.velocityX;
+                        } else if (this.velocityX < 0 && this.x + this.width > platform.x + platform.width) {
+                            this.velocityX = -this.velocityX;
+                        }
+                    }
+                });
+
+                // Remove if fell off screen
+                if (this.y > 700) {
+                    this.collected = true;
+                }
+            }
+
+            checkCollision(platform) {
+                return this.x < platform.x + platform.width &&
+                       this.x + this.width > platform.x &&
+                       this.y < platform.y + platform.height &&
+                       this.y + this.height > platform.y;
+            }
+
+            checkCollection(player) {
+                if (!this.collected && !this.appearing) {
+                    const dx = Math.abs((this.x + this.width / 2) - (player.x + player.width / 2));
+                    const dy = Math.abs((this.y + this.height / 2) - (player.y + player.height / 2));
+                    if (dx < (this.width / 2 + player.width / 2) && dy < (this.height / 2 + player.height / 2)) {
+                        this.collected = true;
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
         // Question Block class
         class QuestionBlock {
-            constructor(x, y) {
+            constructor(x, y, hasMushroom = false) {
                 this.x = x;
                 this.y = y;
                 this.width = 40;
@@ -765,7 +851,8 @@
                 this.bounceOffset = 0;
                 this.bouncing = false;
                 this.bounceSpeed = 0;
-                this.coins = 1;
+                this.hasMushroom = hasMushroom;
+                this.coins = hasMushroom ? 0 : 1;
                 this.animationFrame = 0;
             }
 
@@ -847,6 +934,12 @@
                     this.hit = true;
                     this.bouncing = true;
                     this.bounceSpeed = -8;
+
+                    // Spawn mushroom or coin
+                    if (this.hasMushroom) {
+                        mushrooms.push(new Mushroom(this.x + this.width / 2 - 15, this.y));
+                    }
+
                     return true;
                 }
                 return false;
@@ -931,32 +1024,32 @@
             }
         });
 
-        // Create question blocks throughout the level
+        // Create question blocks throughout the level (some with mushrooms)
         const questionBlocks = [
-            new QuestionBlock(400, 350),
+            new QuestionBlock(400, 350, true), // Mushroom!
             new QuestionBlock(550, 500),
             new QuestionBlock(800, 300),
             new QuestionBlock(950, 400),
 
             new QuestionBlock(1200, 350),
-            new QuestionBlock(1400, 250),
+            new QuestionBlock(1400, 250, true), // Mushroom!
             new QuestionBlock(1650, 300),
             new QuestionBlock(1900, 450),
 
             new QuestionBlock(2100, 350),
             new QuestionBlock(2350, 250),
-            new QuestionBlock(2600, 200),
+            new QuestionBlock(2600, 200, true), // Mushroom!
             new QuestionBlock(2850, 350),
 
             new QuestionBlock(3100, 300),
             new QuestionBlock(3250, 400),
-            new QuestionBlock(3600, 250),
+            new QuestionBlock(3600, 250, true), // Mushroom!
             new QuestionBlock(3850, 350),
 
             new QuestionBlock(4100, 300),
             new QuestionBlock(4350, 400),
             new QuestionBlock(4550, 250),
-            new QuestionBlock(4800, 350),
+            new QuestionBlock(4800, 350, true), // Mushroom!
 
             // Additional blocks near platforms for easier access
             new QuestionBlock(700, 300),
@@ -965,11 +1058,11 @@
             new QuestionBlock(3450, 250),
         ];
 
-        // Create Bowser flag (slides down when touched)
-        const bowserFlag = new BowserFlag(5700, 300);
+        // Create mushrooms array
+        const mushrooms = [];
 
-        // Create Mario flag (rises up when both flags touched)
-        const marioFlag = new Flag(5820, 300);
+        // Create dual flag pole with both Bowser and Mario flags
+        const dualFlagPole = new DualFlagPole(5750, 300);
 
         // Create castle at the end
         const castle = new Castle(LEVEL_WIDTH - 250, 370);
@@ -979,6 +1072,28 @@
             keys[e.key] = true;
             if (e.key === 'r' || e.key === 'R') {
                 location.reload();
+            }
+            // Toggle fullscreen with 'I' key
+            if (e.key === 'i' || e.key === 'I') {
+                if (!isFullscreen) {
+                    if (canvas.requestFullscreen) {
+                        canvas.requestFullscreen();
+                    } else if (canvas.webkitRequestFullscreen) {
+                        canvas.webkitRequestFullscreen();
+                    } else if (canvas.mozRequestFullScreen) {
+                        canvas.mozRequestFullScreen();
+                    }
+                    isFullscreen = true;
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    } else if (document.mozCancelFullScreen) {
+                        document.mozCancelFullScreen();
+                    }
+                    isFullscreen = false;
+                }
             }
         });
 
@@ -1024,45 +1139,53 @@
                 coin.draw();
             });
 
+            // Update and draw mushrooms
+            mushrooms.forEach(mushroom => {
+                mushroom.update();
+                if (mushroom.checkCollection(mario)) {
+                    mario.isBig = true;
+                    score += 100;
+                }
+                mushroom.draw();
+            });
+
             // Draw castle
             castle.draw();
 
-            // Draw Bowser flag
-            bowserFlag.draw();
+            // Draw dual flag pole
+            dualFlagPole.draw();
 
-            // Draw Mario flag
-            marioFlag.draw();
-
-            // Check if player reached Bowser flag and start sliding
-            if (bowserFlag.checkReached(mario) && !bowserFlag.isSliding) {
-                bowserFlag.startSliding(mario);
+            // Check if player reached flag pole and start sliding
+            if (dualFlagPole.checkReached(mario) && !dualFlagPole.bowserSliding) {
+                dualFlagPole.startSliding(mario);
             }
 
-            // Update Bowser flag sliding animation
-            bowserFlag.updatePlayerSliding();
+            // Update flag pole sliding animation
+            dualFlagPole.updatePlayerSliding();
 
             // When Bowser flag reaches bottom, start Mario flag rising
-            if (bowserFlag.isAtBottom() && !marioFlag.isRising) {
-                marioFlag.startRising();
+            if (dualFlagPole.isBowserAtBottom() && !dualFlagPole.marioRising) {
+                dualFlagPole.startRising();
             }
 
-            // Check if player reached Mario flag and both flags completed
-            if (marioFlag.checkReached(mario) && !flagReached && bowserFlag.isAtBottom()) {
+            // Check if player reached flag and both flags completed
+            if (dualFlagPole.checkReached(mario) && !flagReached && dualFlagPole.isBowserAtBottom()) {
                 flagReached = true;
             }
 
             // When Mario flag reaches top, start Mario auto-run
-            if (flagReached && marioFlag.isAtTop() && !marioRunning) {
+            if (flagReached && dualFlagPole.isMarioAtTop() && !marioRunning) {
                 marioRunning = true;
             }
 
             // Check if Mario entered castle
-            if (marioRunning && castle.checkEntry(mario) && !marioInCastle) {
-                marioInCastle = true;
+            if (marioRunning && castle.checkEntry(mario) && !marioInCastle && !mario.enteringCastle) {
+                mario.enteringCastle = true;
             }
 
-            // When Mario enters castle, trigger level complete
-            if (marioInCastle && !levelComplete) {
+            // When Mario fully entered castle (animation complete), trigger level complete
+            if (mario.enteringCastle && mario.castleEntryProgress >= 1 && !levelComplete) {
+                marioInCastle = true;
                 levelComplete = true;
                 gameTime = Math.floor((Date.now() - gameStartTime) / 1000);
 
@@ -1084,11 +1207,9 @@
                 fw.draw();
             });
 
-            // Update and draw player (hide if in castle)
+            // Update and draw player (always draw, fade happens in draw method)
             mario.update();
-            if (!marioInCastle) {
-                mario.draw();
-            }
+            mario.draw();
 
             // Draw UI
             ctx.fillStyle = '#fff';
