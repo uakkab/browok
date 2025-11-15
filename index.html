@@ -67,6 +67,7 @@
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div id="info">
             <div>Arrow Keys: Move Left/Right | Space: Jump</div>
+            <div>Fall in pits: Lose 1 life + 50 coins | You have 3 lives!</div>
         </div>
         <div class="controls">Press R to restart | Reach the flag at the end!</div>
     </div>
@@ -95,6 +96,8 @@
         // Game state
         let score = 0;
         let levelComplete = false;
+        let lives = 3;
+        let deaths = 0;
 
         // Player class
         class Player {
@@ -189,11 +192,25 @@
                 if (this.x < 0) this.x = 0;
                 if (this.x + this.width > LEVEL_WIDTH) this.x = LEVEL_WIDTH - this.width;
 
-                // Reset if fell off screen
+                // Reset if fell off screen (pit)
                 if (this.y > 700) {
+                    // Lose a life
+                    if (lives > 0) {
+                        lives--;
+                    }
+                    deaths++;
+
+                    // Lose coins as penalty
+                    score = Math.max(0, score - 50);
+
+                    // Respawn at safe position (start or last checkpoint)
                     this.x = 100;
                     this.y = 100;
+                    this.velocityX = 0;
                     this.velocityY = 0;
+
+                    // Reset camera
+                    camera.x = 0;
                 }
 
                 // Check collision with platforms
@@ -741,6 +758,17 @@
             ctx.font = 'bold 24px Courier New';
             ctx.fillText(`Score: ${score}`, 20, 30);
 
+            // Draw lives (hearts)
+            ctx.fillText(`Lives: `, 20, 60);
+            for (let i = 0; i < lives; i++) {
+                ctx.fillStyle = '#ff0000';
+                ctx.fillText('♥', 100 + (i * 25), 60);
+            }
+            ctx.fillStyle = '#fff';
+
+            // Draw deaths counter
+            ctx.fillText(`Deaths: ${deaths}`, 20, 90);
+
             // Draw distance indicator
             const distance = Math.floor((mario.x / LEVEL_WIDTH) * 100);
             ctx.fillText(`Progress: ${distance}%`, canvas.width - 200, 30);
@@ -757,7 +785,9 @@
                 ctx.fillStyle = '#fff';
                 ctx.font = 'bold 24px Courier New';
                 ctx.fillText(`Final Score: ${score}`, canvas.width / 2 - 120, canvas.height / 2 + 50);
-                ctx.fillText('Press R to restart', canvas.width / 2 - 140, canvas.height / 2 + 100);
+                ctx.fillText(`Deaths: ${deaths}`, canvas.width / 2 - 70, canvas.height / 2 + 80);
+                ctx.fillText(`Lives Remaining: ${lives}`, canvas.width / 2 - 140, canvas.height / 2 + 110);
+                ctx.fillText('Press R to restart', canvas.width / 2 - 140, canvas.height / 2 + 150);
             } else {
                 requestAnimationFrame(gameLoop);
             }
