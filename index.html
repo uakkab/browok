@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mario Bros Game</title>
+    <title>Mario and Luigi Brotherships</title>
     <style>
         body {
             margin: 0;
@@ -34,16 +34,23 @@
             margin-top: 10px;
             font-size: 12px;
         }
+        .title {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-shadow: 3px 3px 0px #000;
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
+        <div class="title">MARIO AND LUIGI BROTHERSHIPS</div>
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div id="info">
-            <div>Player 1 (Mario): Arrow Keys to move, Space to jump</div>
-            <div>Player 2 (Luigi): WASD to move, Q to jump</div>
+            <div>Arrow Keys: Move Left/Right | Space: Jump</div>
         </div>
-        <div class="controls">Press R to restart</div>
+        <div class="controls">Press R to restart | Reach the flag at the end!</div>
     </div>
 
     <script>
@@ -56,13 +63,24 @@
         const MOVE_SPEED = 5;
         const PLAYER_WIDTH = 32;
         const PLAYER_HEIGHT = 48;
+        const LEVEL_WIDTH = 6000; // Long level
+
+        // Camera
+        let camera = {
+            x: 0,
+            y: 0
+        };
 
         // Keys pressed
         const keys = {};
 
+        // Game state
+        let score = 0;
+        let levelComplete = false;
+
         // Player class
         class Player {
-            constructor(x, y, color, controls) {
+            constructor(x, y, color) {
                 this.x = x;
                 this.y = y;
                 this.width = PLAYER_WIDTH;
@@ -70,66 +88,68 @@
                 this.velocityX = 0;
                 this.velocityY = 0;
                 this.color = color;
-                this.controls = controls;
                 this.onGround = false;
-                this.direction = 1; // 1 for right, -1 for left
+                this.direction = 1;
             }
 
             draw() {
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
                 // Body (overalls)
                 ctx.fillStyle = '#0000ff';
-                ctx.fillRect(this.x + 8, this.y + 20, 16, 20);
+                ctx.fillRect(screenX + 8, screenY + 20, 16, 20);
 
                 // Head (skin)
                 ctx.fillStyle = '#ffcc99';
-                ctx.fillRect(this.x + 8, this.y + 8, 16, 12);
+                ctx.fillRect(screenX + 8, screenY + 8, 16, 12);
 
                 // Hat
                 ctx.fillStyle = this.color;
-                ctx.fillRect(this.x + 6, this.y + 4, 20, 8);
+                ctx.fillRect(screenX + 6, screenY + 4, 20, 8);
 
                 // Shirt under overalls
                 ctx.fillStyle = this.color;
-                ctx.fillRect(this.x + 8, this.y + 20, 16, 6);
+                ctx.fillRect(screenX + 8, screenY + 20, 16, 6);
 
                 // Legs
                 ctx.fillStyle = '#0000ff';
-                ctx.fillRect(this.x + 10, this.y + 40, 6, 8);
-                ctx.fillRect(this.x + 18, this.y + 40, 6, 8);
+                ctx.fillRect(screenX + 10, screenY + 40, 6, 8);
+                ctx.fillRect(screenX + 18, screenY + 40, 6, 8);
 
                 // Shoes
                 ctx.fillStyle = '#8B4513';
-                ctx.fillRect(this.x + 8, this.y + 44, 8, 4);
-                ctx.fillRect(this.x + 16, this.y + 44, 8, 4);
+                ctx.fillRect(screenX + 8, screenY + 44, 8, 4);
+                ctx.fillRect(screenX + 16, screenY + 44, 8, 4);
 
                 // Eyes
                 ctx.fillStyle = '#000';
-                ctx.fillRect(this.x + 10, this.y + 12, 3, 3);
-                ctx.fillRect(this.x + 19, this.y + 12, 3, 3);
+                ctx.fillRect(screenX + 10, screenY + 12, 3, 3);
+                ctx.fillRect(screenX + 19, screenY + 12, 3, 3);
 
                 // Mustache
                 ctx.fillStyle = '#000';
-                ctx.fillRect(this.x + 8, this.y + 18, 16, 2);
+                ctx.fillRect(screenX + 8, screenY + 18, 16, 2);
 
                 // Arms
                 ctx.fillStyle = this.color;
-                ctx.fillRect(this.x + 4, this.y + 24, 4, 10);
-                ctx.fillRect(this.x + 24, this.y + 24, 4, 10);
+                ctx.fillRect(screenX + 4, screenY + 24, 4, 10);
+                ctx.fillRect(screenX + 24, screenY + 24, 4, 10);
             }
 
             update() {
                 // Handle input
-                if (keys[this.controls.left]) {
+                if (keys['ArrowLeft']) {
                     this.velocityX = -MOVE_SPEED;
                     this.direction = -1;
-                } else if (keys[this.controls.right]) {
+                } else if (keys['ArrowRight']) {
                     this.velocityX = MOVE_SPEED;
                     this.direction = 1;
                 } else {
                     this.velocityX = 0;
                 }
 
-                if (keys[this.controls.jump] && this.onGround) {
+                if (keys[' '] && this.onGround) {
                     this.velocityY = JUMP_STRENGTH;
                     this.onGround = false;
                 }
@@ -143,10 +163,11 @@
 
                 // Keep in bounds (horizontal)
                 if (this.x < 0) this.x = 0;
-                if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+                if (this.x + this.width > LEVEL_WIDTH) this.x = LEVEL_WIDTH - this.width;
 
                 // Reset if fell off screen
-                if (this.y > canvas.height) {
+                if (this.y > 700) {
+                    this.x = 100;
                     this.y = 100;
                     this.velocityY = 0;
                 }
@@ -176,6 +197,11 @@
                         }
                     }
                 });
+
+                // Update camera to follow player
+                camera.x = this.x - canvas.width / 3;
+                if (camera.x < 0) camera.x = 0;
+                if (camera.x > LEVEL_WIDTH - canvas.width) camera.x = LEVEL_WIDTH - canvas.width;
             }
 
             checkCollision(platform) {
@@ -197,9 +223,15 @@
             }
 
             draw() {
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
+                // Only draw if on screen
+                if (screenX + this.width < 0 || screenX > canvas.width) return;
+
                 // Main platform
                 ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.fillRect(screenX, screenY, this.width, this.height);
 
                 // Add brick pattern
                 ctx.strokeStyle = '#654321';
@@ -209,37 +241,13 @@
 
                 for (let x = 0; x < this.width; x += brickWidth) {
                     for (let y = 0; y < this.height; y += brickHeight) {
-                        ctx.strokeRect(this.x + x, this.y + y, brickWidth, brickHeight);
+                        ctx.strokeRect(screenX + x, screenY + y, brickWidth, brickHeight);
                     }
                 }
             }
         }
 
-        // Create players
-        const mario = new Player(100, 100, '#ff0000', {
-            left: 'ArrowLeft',
-            right: 'ArrowRight',
-            jump: ' '
-        });
-
-        const luigi = new Player(200, 100, '#00ff00', {
-            left: 'a',
-            right: 'd',
-            jump: 'q'
-        });
-
-        // Create platforms
-        const platforms = [
-            new Platform(0, 550, 800, 50, '#8B4513'),           // Ground
-            new Platform(150, 450, 200, 20, '#ff8800'),         // Platform 1
-            new Platform(450, 400, 150, 20, '#ff8800'),         // Platform 2
-            new Platform(100, 300, 150, 20, '#ff8800'),         // Platform 3
-            new Platform(400, 250, 200, 20, '#ff8800'),         // Platform 4
-            new Platform(250, 150, 150, 20, '#ff8800'),         // Platform 5
-            new Platform(650, 350, 100, 20, '#ff8800'),         // Platform 6
-        ];
-
-        // Coins
+        // Coin class
         class Coin {
             constructor(x, y) {
                 this.x = x;
@@ -250,9 +258,15 @@
 
             draw() {
                 if (!this.collected) {
+                    const screenX = this.x - camera.x;
+                    const screenY = this.y - camera.y;
+
+                    // Only draw if on screen
+                    if (screenX < -20 || screenX > canvas.width + 20) return;
+
                     ctx.fillStyle = '#ffff00';
                     ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    ctx.arc(screenX, screenY, this.radius, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.strokeStyle = '#ffaa00';
                     ctx.lineWidth = 2;
@@ -274,17 +288,111 @@
             }
         }
 
-        // Create coins
-        const coins = [
-            new Coin(250, 420),
-            new Coin(525, 370),
-            new Coin(175, 270),
-            new Coin(500, 220),
-            new Coin(325, 120),
-            new Coin(700, 320),
+        // Flag class
+        class Flag {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 10;
+                this.height = 200;
+                this.flagWidth = 40;
+                this.flagHeight = 30;
+            }
+
+            draw() {
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
+                // Pole
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(screenX, screenY, this.width, this.height);
+
+                // Flag
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(screenX + this.width, screenY, this.flagWidth, this.flagHeight);
+
+                // Flag pattern
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 20px Courier New';
+                ctx.fillText('!', screenX + 20, screenY + 22);
+            }
+
+            checkReached(player) {
+                return player.x + player.width > this.x && player.x < this.x + this.width + this.flagWidth;
+            }
+        }
+
+        // Create player (Mario)
+        const mario = new Player(100, 100, '#ff0000');
+
+        // Create long level with platforms
+        const platforms = [
+            // Ground sections
+            new Platform(0, 550, 400, 50, '#8B4513'),
+            new Platform(500, 550, 400, 50, '#8B4513'),
+            new Platform(1000, 550, 500, 50, '#8B4513'),
+            new Platform(1600, 550, 400, 50, '#8B4513'),
+            new Platform(2100, 550, 500, 50, '#8B4513'),
+            new Platform(2700, 550, 400, 50, '#8B4513'),
+            new Platform(3200, 550, 500, 50, '#8B4513'),
+            new Platform(3800, 550, 400, 50, '#8B4513'),
+            new Platform(4300, 550, 500, 50, '#8B4513'),
+            new Platform(4900, 550, 1100, 50, '#8B4513'),
+
+            // Floating platforms
+            new Platform(250, 450, 100, 20, '#ff8800'),
+            new Platform(450, 400, 120, 20, '#ff8800'),
+            new Platform(650, 350, 100, 20, '#ff8800'),
+            new Platform(850, 450, 150, 20, '#ff8800'),
+
+            new Platform(1100, 400, 120, 20, '#ff8800'),
+            new Platform(1300, 300, 100, 20, '#ff8800'),
+            new Platform(1500, 450, 150, 20, '#ff8800'),
+            new Platform(1750, 350, 100, 20, '#ff8800'),
+
+            new Platform(2050, 400, 140, 20, '#ff8800'),
+            new Platform(2300, 300, 120, 20, '#ff8800'),
+            new Platform(2500, 250, 100, 20, '#ff8800'),
+            new Platform(2750, 400, 150, 20, '#ff8800'),
+
+            new Platform(3000, 350, 120, 20, '#ff8800'),
+            new Platform(3300, 450, 100, 20, '#ff8800'),
+            new Platform(3500, 300, 140, 20, '#ff8800'),
+            new Platform(3750, 400, 120, 20, '#ff8800'),
+
+            new Platform(4000, 350, 100, 20, '#ff8800'),
+            new Platform(4200, 450, 150, 20, '#ff8800'),
+            new Platform(4450, 300, 120, 20, '#ff8800'),
+            new Platform(4700, 400, 140, 20, '#ff8800'),
+
+            // Higher platforms
+            new Platform(1200, 200, 100, 20, '#ff8800'),
+            new Platform(2200, 150, 100, 20, '#ff8800'),
+            new Platform(3400, 180, 120, 20, '#ff8800'),
+            new Platform(4500, 200, 100, 20, '#ff8800'),
+
+            // Gap challenges
+            new Platform(1800, 500, 80, 20, '#ff8800'),
+            new Platform(3100, 500, 80, 20, '#ff8800'),
         ];
 
-        let score = 0;
+        // Create many coins throughout the level
+        const coins = [];
+        for (let i = 0; i < 80; i++) {
+            const x = 300 + (i * 70);
+            const y = 200 + Math.sin(i * 0.5) * 100;
+            coins.push(new Coin(x, y));
+        }
+
+        // Additional coins on platforms
+        platforms.forEach((platform, index) => {
+            if (platform.color === '#ff8800' && index % 2 === 0) {
+                coins.push(new Coin(platform.x + platform.width / 2, platform.y - 30));
+            }
+        });
+
+        // Create finish flag
+        const finishFlag = new Flag(LEVEL_WIDTH - 200, 350);
 
         // Event listeners
         window.addEventListener('keydown', (e) => {
@@ -298,49 +406,78 @@
             keys[e.key] = false;
         });
 
+        // Draw clouds in background
+        function drawClouds() {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+
+            for (let i = 0; i < 20; i++) {
+                const baseX = (i * 400) - (camera.x * 0.5); // Parallax effect
+                const y = 60 + (i % 3) * 50;
+
+                ctx.beginPath();
+                ctx.arc(baseX, y, 30, 0, Math.PI * 2);
+                ctx.arc(baseX + 30, y, 40, 0, Math.PI * 2);
+                ctx.arc(baseX + 60, y, 30, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
         // Game loop
         function gameLoop() {
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw background elements (clouds)
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-            ctx.beginPath();
-            ctx.arc(100, 80, 30, 0, Math.PI * 2);
-            ctx.arc(130, 80, 40, 0, Math.PI * 2);
-            ctx.arc(160, 80, 30, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.beginPath();
-            ctx.arc(600, 120, 35, 0, Math.PI * 2);
-            ctx.arc(635, 120, 45, 0, Math.PI * 2);
-            ctx.arc(675, 120, 35, 0, Math.PI * 2);
-            ctx.fill();
+            // Draw background elements
+            drawClouds();
 
             // Update and draw platforms
             platforms.forEach(platform => platform.draw());
 
             // Update and draw coins
             coins.forEach(coin => {
-                if (coin.checkCollection(mario) || coin.checkCollection(luigi)) {
+                if (coin.checkCollection(mario)) {
                     score += 10;
                 }
                 coin.draw();
             });
 
-            // Update and draw players
+            // Draw finish flag
+            finishFlag.draw();
+
+            // Check if level complete
+            if (finishFlag.checkReached(mario) && !levelComplete) {
+                levelComplete = true;
+            }
+
+            // Update and draw player
             mario.update();
             mario.draw();
 
-            luigi.update();
-            luigi.draw();
-
-            // Draw score
+            // Draw UI
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 24px Courier New';
             ctx.fillText(`Score: ${score}`, 20, 30);
 
-            requestAnimationFrame(gameLoop);
+            // Draw distance indicator
+            const distance = Math.floor((mario.x / LEVEL_WIDTH) * 100);
+            ctx.fillText(`Progress: ${distance}%`, canvas.width - 200, 30);
+
+            // Level complete message
+            if (levelComplete) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#ffff00';
+                ctx.font = 'bold 48px Courier New';
+                ctx.fillText('LEVEL COMPLETE!', canvas.width / 2 - 250, canvas.height / 2);
+
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 24px Courier New';
+                ctx.fillText(`Final Score: ${score}`, canvas.width / 2 - 120, canvas.height / 2 + 50);
+                ctx.fillText('Press R to restart', canvas.width / 2 - 140, canvas.height / 2 + 100);
+            } else {
+                requestAnimationFrame(gameLoop);
+            }
         }
 
         // Start game
