@@ -108,6 +108,7 @@
                 this.color = color;
                 this.onGround = false;
                 this.direction = 1;
+                this.slidingFlag = false;
             }
 
             draw() {
@@ -156,6 +157,11 @@
             }
 
             update() {
+                // Don't update if sliding on flag
+                if (this.slidingFlag) {
+                    return;
+                }
+
                 // Handle input
                 if (keys['ArrowLeft']) {
                     this.velocityX = -MOVE_SPEED;
@@ -212,6 +218,23 @@
                             } else if (this.velocityX < 0) {
                                 this.x = platform.x + platform.width;
                             }
+                        }
+                    }
+                });
+
+                // Check collision with question blocks
+                questionBlocks.forEach(block => {
+                    // Check for hit from below
+                    if (block.checkHit(this)) {
+                        score += 10;
+                    }
+
+                    // Check platform collision (standing on top)
+                    if (block.checkCollision(this)) {
+                        if (this.velocityY > 0 && this.y + this.height - this.velocityY <= block.y) {
+                            this.y = block.y - this.height;
+                            this.velocityY = 0;
+                            this.onGround = true;
                         }
                     }
                 });
@@ -306,7 +329,7 @@
             }
         }
 
-        // Flag class
+        // Bowser Flag class with sliding animation
         class Flag {
             constructor(x, y) {
                 this.x = x;
@@ -316,6 +339,10 @@
                 this.flagWidth = 60;
                 this.flagHeight = 40;
                 this.waveOffset = 0;
+                this.flagY = 10; // Flag position on pole
+                this.isSliding = false;
+                this.slideSpeed = 3;
+                this.playerSliding = null;
             }
 
             draw() {
@@ -338,7 +365,7 @@
                 ctx.fillStyle = '#fff';
                 ctx.fillRect(screenX + 2, screenY, 3, this.height);
 
-                // Pole segments (like a real flag pole)
+                // Pole segments
                 ctx.strokeStyle = '#999';
                 ctx.lineWidth = 2;
                 for (let i = 0; i < 5; i++) {
@@ -348,42 +375,44 @@
                     ctx.stroke();
                 }
 
-                // Waving flag effect
-                this.waveOffset += 0.1;
-                const wave = Math.sin(this.waveOffset) * 3;
+                // Slide flag down if activated
+                if (this.isSliding && this.flagY < this.height - this.flagHeight - 20) {
+                    this.flagY += this.slideSpeed;
+                }
+
+                // Waving flag effect (only if not sliding)
+                const wave = this.isSliding ? 0 : Math.sin(this.waveOffset) * 3;
+                if (!this.isSliding) {
+                    this.waveOffset += 0.1;
+                }
 
                 // Flag shadow
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-                ctx.fillRect(screenX + this.width + 2 + wave, screenY + 12, this.flagWidth, this.flagHeight);
+                ctx.fillRect(screenX + this.width + 2 + wave, screenY + this.flagY + 2, this.flagWidth, this.flagHeight);
 
-                // Main flag (green)
-                ctx.fillStyle = '#00ff00';
-                ctx.fillRect(screenX + this.width + wave, screenY + 10, this.flagWidth, this.flagHeight);
+                // Main flag (Bowser colors - black background)
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(screenX + this.width + wave, screenY + this.flagY, this.flagWidth, this.flagHeight);
+
+                // Bowser emblem - red circle
+                ctx.fillStyle = '#ff3333';
+                ctx.beginPath();
+                ctx.arc(screenX + this.width + wave + 30, screenY + this.flagY + 20, 14, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Bowser symbol - spikes/horns
+                ctx.fillStyle = '#ffaa00';
+                ctx.beginPath();
+                ctx.moveTo(screenX + this.width + wave + 30, screenY + this.flagY + 10);
+                ctx.lineTo(screenX + this.width + wave + 25, screenY + this.flagY + 16);
+                ctx.lineTo(screenX + this.width + wave + 30, screenY + this.flagY + 14);
+                ctx.lineTo(screenX + this.width + wave + 35, screenY + this.flagY + 16);
+                ctx.fill();
 
                 // Flag border
-                ctx.strokeStyle = '#00aa00';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(screenX + this.width + wave, screenY + 10, this.flagWidth, this.flagHeight);
-
-                // Flag pattern - checkered
-                ctx.fillStyle = '#00cc00';
-                for (let i = 0; i < 3; i++) {
-                    for (let j = 0; j < 2; j++) {
-                        if ((i + j) % 2 === 0) {
-                            ctx.fillRect(
-                                screenX + this.width + wave + (i * 20),
-                                screenY + 10 + (j * 20),
-                                20,
-                                20
-                            );
-                        }
-                    }
-                }
-
-                // Flag text
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 24px Courier New';
-                ctx.fillText('!', screenX + this.width + wave + 22, screenY + 36);
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(screenX + this.width + wave, screenY + this.flagY, this.flagWidth, this.flagHeight);
 
                 // Pole top ball
                 ctx.fillStyle = '#ffff00';
@@ -397,6 +426,137 @@
 
             checkReached(player) {
                 return player.x + player.width > this.x && player.x < this.x + this.width + this.flagWidth;
+            }
+
+            startSliding(player) {
+                if (!this.isSliding) {
+                    this.isSliding = true;
+                    this.playerSliding = player;
+                }
+            }
+
+            updatePlayerSliding() {
+                if (this.playerSliding && this.isSliding) {
+                    // Position player on pole
+                    this.playerSliding.x = this.x + this.width / 2 - this.playerSliding.width / 2;
+                    this.playerSliding.y = this.y + this.flagY + this.flagHeight / 2;
+                    this.playerSliding.velocityX = 0;
+                    this.playerSliding.velocityY = 0;
+                    this.playerSliding.slidingFlag = true;
+
+                    // Stop sliding when reached bottom
+                    if (this.flagY >= this.height - this.flagHeight - 20) {
+                        this.playerSliding.slidingFlag = false;
+                        this.playerSliding = null;
+                    }
+                }
+            }
+        }
+
+        // Question Block class
+        class QuestionBlock {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 40;
+                this.height = 40;
+                this.hit = false;
+                this.bounceOffset = 0;
+                this.bouncing = false;
+                this.bounceSpeed = 0;
+                this.coins = 1;
+                this.animationFrame = 0;
+            }
+
+            draw() {
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y + this.bounceOffset;
+
+                // Only draw if on screen
+                if (screenX + this.width < 0 || screenX > canvas.width) return;
+
+                if (!this.hit) {
+                    // Active question block - yellow/gold
+                    ctx.fillStyle = '#ffcc00';
+                    ctx.fillRect(screenX, screenY, this.width, this.height);
+
+                    // Border
+                    ctx.strokeStyle = '#ff9900';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(screenX, screenY, this.width, this.height);
+
+                    // Inner border detail
+                    ctx.strokeStyle = '#ffff66';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(screenX + 4, screenY + 4, this.width - 8, this.height - 8);
+
+                    // Question mark
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 28px Courier New';
+                    const questionMark = '?';
+                    ctx.fillText(questionMark, screenX + 11, screenY + 30);
+
+                    // Animate shimmer
+                    this.animationFrame += 0.1;
+                    if (Math.sin(this.animationFrame) > 0.5) {
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                        ctx.fillRect(screenX + 2, screenY + 2, 10, 10);
+                    }
+                } else {
+                    // Used block - brown/gray
+                    ctx.fillStyle = '#8B6914';
+                    ctx.fillRect(screenX, screenY, this.width, this.height);
+
+                    // Border
+                    ctx.strokeStyle = '#654321';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(screenX, screenY, this.width, this.height);
+
+                    // Darker inner rectangle
+                    ctx.fillStyle = '#6B4810';
+                    ctx.fillRect(screenX + 4, screenY + 4, this.width - 8, this.height - 8);
+                }
+
+                // Handle bounce animation
+                if (this.bouncing) {
+                    this.bounceOffset += this.bounceSpeed;
+                    this.bounceSpeed += 0.8;
+                    if (this.bounceOffset >= 0) {
+                        this.bounceOffset = 0;
+                        this.bounceSpeed = 0;
+                        this.bouncing = false;
+                    }
+                }
+            }
+
+            checkHit(player) {
+                if (this.hit) return false;
+
+                // Check if player hits block from below
+                const playerTop = player.y;
+                const playerBottom = player.y + player.height;
+                const blockBottom = this.y + this.height;
+
+                if (player.velocityY < 0 &&
+                    player.x + player.width > this.x &&
+                    player.x < this.x + this.width &&
+                    playerTop <= blockBottom &&
+                    playerTop >= this.y) {
+
+                    this.hit = true;
+                    this.bouncing = true;
+                    this.bounceSpeed = -8;
+                    return true;
+                }
+                return false;
+            }
+
+            // Treat as platform when standing on top
+            checkCollision(player) {
+                return player.x < this.x + this.width &&
+                       player.x + player.width > this.x &&
+                       player.y < this.y + this.height &&
+                       player.y + player.height > this.y;
             }
         }
 
@@ -469,6 +629,40 @@
             }
         });
 
+        // Create question blocks throughout the level
+        const questionBlocks = [
+            new QuestionBlock(400, 350),
+            new QuestionBlock(550, 500),
+            new QuestionBlock(800, 300),
+            new QuestionBlock(950, 400),
+
+            new QuestionBlock(1200, 350),
+            new QuestionBlock(1400, 250),
+            new QuestionBlock(1650, 300),
+            new QuestionBlock(1900, 450),
+
+            new QuestionBlock(2100, 350),
+            new QuestionBlock(2350, 250),
+            new QuestionBlock(2600, 200),
+            new QuestionBlock(2850, 350),
+
+            new QuestionBlock(3100, 300),
+            new QuestionBlock(3250, 400),
+            new QuestionBlock(3600, 250),
+            new QuestionBlock(3850, 350),
+
+            new QuestionBlock(4100, 300),
+            new QuestionBlock(4350, 400),
+            new QuestionBlock(4550, 250),
+            new QuestionBlock(4800, 350),
+
+            // Additional blocks near platforms for easier access
+            new QuestionBlock(700, 300),
+            new QuestionBlock(1550, 400),
+            new QuestionBlock(2450, 200),
+            new QuestionBlock(3450, 250),
+        ];
+
         // Create finish flag at the end
         const finishFlag = new Flag(LEVEL_WIDTH - 200, 300);
 
@@ -511,6 +705,9 @@
             // Update and draw platforms
             platforms.forEach(platform => platform.draw());
 
+            // Update and draw question blocks
+            questionBlocks.forEach(block => block.draw());
+
             // Update and draw coins
             coins.forEach(coin => {
                 if (coin.checkCollection(mario)) {
@@ -522,8 +719,16 @@
             // Draw finish flag
             finishFlag.draw();
 
-            // Check if level complete
-            if (finishFlag.checkReached(mario) && !levelComplete) {
+            // Check if player reached flag and start sliding
+            if (finishFlag.checkReached(mario) && !finishFlag.isSliding) {
+                finishFlag.startSliding(mario);
+            }
+
+            // Update flag sliding animation
+            finishFlag.updatePlayerSliding();
+
+            // Check if level complete (when flag is fully down)
+            if (finishFlag.isSliding && finishFlag.flagY >= finishFlag.height - finishFlag.flagHeight - 20 && !levelComplete) {
                 levelComplete = true;
             }
 
