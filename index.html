@@ -163,10 +163,12 @@
                     ctx.translate(-(screenX + this.width / 2), -(screenY + this.height));
                 }
 
-                // Hat
+                // Hat (bigger when powered up)
+                const hatScale = this.isBig ? 2 : 1;
+                const hatYOffset = this.isBig ? -10 : 0; // Move up when bigger
                 ctx.fillStyle = this.color;
-                ctx.fillRect(screenX + 6, screenY + 4 + yOffset, 20, 8);
-                ctx.fillRect(screenX + 4, screenY + 8 + yOffset, 5, 4); // Brim
+                ctx.fillRect(screenX + 6 - (hatScale - 1) * 10, screenY + 4 + yOffset + hatYOffset, 20 * hatScale, 8 * hatScale);
+                ctx.fillRect(screenX + 4 - (hatScale - 1) * 10, screenY + 8 + yOffset + hatYOffset + (8 * (hatScale - 1)), 5 * hatScale, 4 * hatScale); // Brim
 
                 // Head (skin)
                 ctx.fillStyle = '#ffcc99';
@@ -573,16 +575,22 @@
 
             updatePlayerSliding() {
                 if (this.playerSliding && this.bowserSliding) {
-                    // Position player on pole
+                    // Keep player attached to the pole as it slides down
                     this.playerSliding.x = this.x + this.width / 2 - this.playerSliding.width / 2;
                     this.playerSliding.y = this.y + this.bowserFlagY + this.flagHeight / 2;
                     this.playerSliding.velocityX = 0;
                     this.playerSliding.velocityY = 0;
                     this.playerSliding.slidingFlag = true;
 
+                    // Update camera to follow player on pole
+                    camera.x = this.playerSliding.x - canvas.width / 3;
+                    if (camera.x < 0) camera.x = 0;
+                    if (camera.x > LEVEL_WIDTH - canvas.width) camera.x = LEVEL_WIDTH - canvas.width;
+
                     // Stop sliding when reached bottom
                     if (this.bowserFlagY >= this.height - this.flagHeight - 20) {
                         this.playerSliding.slidingFlag = false;
+                        this.playerSliding.y = this.y + this.height - this.playerSliding.height - 5; // Land on ground
                         this.playerSliding = null;
                     }
                 }
@@ -840,6 +848,153 @@
             }
         }
 
+        // Goomba Enemy class
+        class Goomba {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 32;
+                this.height = 32;
+                this.velocityX = -1.5;
+                this.velocityY = 0;
+                this.defeated = false;
+                this.squashed = false;
+                this.squashTimer = 0;
+                this.animationFrame = 0;
+            }
+
+            draw() {
+                if (this.defeated && this.squashTimer > 30) return; // Don't draw after squashed
+
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
+                if (this.squashed) {
+                    // Draw squashed Goomba (flat)
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(screenX, screenY + this.height - 8, this.width, 8);
+                    ctx.fillStyle = '#654321';
+                    ctx.fillRect(screenX + 4, screenY + this.height - 8, this.width - 8, 8);
+                } else {
+                    // Goomba body (brown mushroom shape)
+                    ctx.fillStyle = '#8B4513';
+
+                    // Head/cap
+                    ctx.beginPath();
+                    ctx.arc(screenX + this.width / 2, screenY + 12, 14, Math.PI, 0);
+                    ctx.fill();
+                    ctx.fillRect(screenX + 2, screenY + 12, this.width - 4, 10);
+
+                    // Eyes (angry look)
+                    ctx.fillStyle = '#fff';
+                    const eyeOffset = Math.floor(this.animationFrame) % 2 === 0 ? 0 : 1;
+                    ctx.fillRect(screenX + 8, screenY + 10 + eyeOffset, 6, 6);
+                    ctx.fillRect(screenX + 18, screenY + 10 + eyeOffset, 6, 6);
+
+                    // Pupils
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(screenX + 10, screenY + 12 + eyeOffset, 3, 3);
+                    ctx.fillRect(screenX + 20, screenY + 12 + eyeOffset, 3, 3);
+
+                    // Feet (walking animation)
+                    ctx.fillStyle = '#654321';
+                    const footOffset = Math.sin(this.animationFrame) > 0 ? 2 : -2;
+                    ctx.fillRect(screenX + 6 + footOffset, screenY + this.height - 6, 8, 6);
+                    ctx.fillRect(screenX + 18 - footOffset, screenY + this.height - 6, 8, 6);
+                }
+            }
+
+            update() {
+                if (this.squashed) {
+                    this.squashTimer++;
+                    return;
+                }
+
+                if (this.defeated) return;
+
+                // Animation
+                this.animationFrame += 0.1;
+
+                // Apply gravity
+                this.velocityY += GRAVITY;
+
+                // Update position
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+
+                // Check collision with platforms
+                let onGround = false;
+                platforms.forEach(platform => {
+                    if (this.checkCollision(platform)) {
+                        if (this.velocityY > 0 && this.y + this.height - this.velocityY <= platform.y) {
+                            this.y = platform.y - this.height;
+                            this.velocityY = 0;
+                            onGround = true;
+                        }
+                        // Turn around at walls
+                        else if (this.velocityX > 0 && this.x < platform.x) {
+                            this.velocityX = -this.velocityX;
+                        } else if (this.velocityX < 0 && this.x + this.width > platform.x + platform.width) {
+                            this.velocityX = -this.velocityX;
+                        }
+                    }
+                });
+
+                // Fall off edges (reverse direction)
+                if (!onGround && this.y > 700) {
+                    this.defeated = true;
+                }
+
+                // Turn around at pits (simple edge detection)
+                if (onGround) {
+                    const nextX = this.x + this.velocityX * 20;
+                    let willFall = true;
+                    platforms.forEach(platform => {
+                        if (nextX + this.width / 2 > platform.x &&
+                            nextX + this.width / 2 < platform.x + platform.width &&
+                            Math.abs(this.y + this.height - platform.y) < 10) {
+                            willFall = false;
+                        }
+                    });
+                    if (willFall) {
+                        this.velocityX = -this.velocityX;
+                    }
+                }
+            }
+
+            checkCollision(platform) {
+                return this.x < platform.x + platform.width &&
+                       this.x + this.width > platform.x &&
+                       this.y < platform.y + platform.height &&
+                       this.y + this.height > platform.y;
+            }
+
+            checkPlayerCollision(player) {
+                if (this.defeated) return null;
+
+                const overlap = player.x < this.x + this.width &&
+                               player.x + player.width > this.x &&
+                               player.y < this.y + this.height &&
+                               player.y + player.height > this.y;
+
+                if (overlap) {
+                    // Check if player jumped on Goomba
+                    if (player.velocityY > 0 && player.y + player.height - player.velocityY <= this.y + 10) {
+                        return 'stomp';
+                    } else {
+                        return 'hit';
+                    }
+                }
+                return null;
+            }
+
+            stomp() {
+                this.defeated = true;
+                this.squashed = true;
+                this.squashTimer = 0;
+            }
+        }
+
         // Question Block class
         class QuestionBlock {
             constructor(x, y, hasMushroom = false) {
@@ -959,8 +1114,19 @@
 
         // Create long level with platforms
         const platforms = [
-            // Ground sections - all pits covered!
-            new Platform(0, 550, LEVEL_WIDTH, 50, '#8B4513'),
+            // Ground sections with small pits
+            new Platform(0, 550, 800, 50, '#8B4513'),
+            // Pit from 800-900
+            new Platform(900, 550, 700, 50, '#8B4513'),
+            // Pit from 1600-1700
+            new Platform(1700, 550, 900, 50, '#8B4513'),
+            // Pit from 2600-2700
+            new Platform(2700, 550, 800, 50, '#8B4513'),
+            // Pit from 3500-3600
+            new Platform(3600, 550, 700, 50, '#8B4513'),
+            // Pit from 4300-4400
+            new Platform(4400, 550, 1600, 50, '#8B4513'),
+            // No more pits near the end
 
             // Floating platforms
             new Platform(250, 450, 100, 20, '#ff8800'),
@@ -1061,6 +1227,20 @@
         // Create mushrooms array
         const mushrooms = [];
 
+        // Create Goombas throughout the level
+        const goombas = [
+            new Goomba(600, 500),
+            new Goomba(1200, 500),
+            new Goomba(1800, 500),
+            new Goomba(2200, 500),
+            new Goomba(2900, 500),
+            new Goomba(3300, 500),
+            new Goomba(3800, 500),
+            new Goomba(4500, 500),
+            new Goomba(4900, 500),
+            new Goomba(5200, 500),
+        ];
+
         // Create dual flag pole with both Bowser and Mario flags
         const dualFlagPole = new DualFlagPole(5750, 300);
 
@@ -1147,6 +1327,30 @@
                     score += 100;
                 }
                 mushroom.draw();
+            });
+
+            // Update and draw Goombas
+            goombas.forEach(goomba => {
+                goomba.update();
+                const collision = goomba.checkPlayerCollision(mario);
+                if (collision === 'stomp') {
+                    goomba.stomp();
+                    mario.velocityY = -8; // Bounce on enemy
+                    score += 50;
+                } else if (collision === 'hit' && !mario.enteringCastle && !mario.slidingFlag) {
+                    // Mario got hit - shrink if big, otherwise lose a life
+                    if (mario.isBig) {
+                        mario.isBig = false;
+                    } else {
+                        deaths++;
+                        // Respawn at last safe position
+                        mario.x = lastSafePosition.x;
+                        mario.y = lastSafePosition.y;
+                        mario.velocityX = 0;
+                        mario.velocityY = 0;
+                    }
+                }
+                goomba.draw();
             });
 
             // Draw castle
