@@ -52,6 +52,50 @@
             color: #ffff00;
             margin-bottom: 5px;
         }
+        #characterSelect {
+            background: rgba(0, 0, 0, 0.9);
+            padding: 40px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+        #characterSelect h2 {
+            color: #ffff00;
+            font-size: 32px;
+            margin-bottom: 30px;
+            text-shadow: 3px 3px 0px #000;
+        }
+        .character-buttons {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+        }
+        .character-btn {
+            width: 200px;
+            padding: 20px;
+            font-size: 24px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            border: 4px solid #fff;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-shadow: 2px 2px 0px #000;
+        }
+        .character-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+        .character-btn.mario {
+            background: linear-gradient(135deg, #ff0000, #cc0000);
+            color: white;
+        }
+        .character-btn.luigi {
+            background: linear-gradient(135deg, #00aa00, #008800);
+            color: white;
+        }
+        .hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -64,12 +108,22 @@
             <div>Abdul Rafay</div>
             <div>Khursheed Ahmad</div>
         </div>
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
-        <div id="info">
+
+        <!-- Character Selection Screen -->
+        <div id="characterSelect">
+            <h2>SELECT YOUR CHARACTER</h2>
+            <div class="character-buttons">
+                <button class="character-btn mario" onclick="selectCharacter('mario')">MARIO</button>
+                <button class="character-btn luigi" onclick="selectCharacter('luigi')">LUIGI</button>
+            </div>
+        </div>
+
+        <canvas id="gameCanvas" width="800" height="600" class="hidden"></canvas>
+        <div id="info" class="hidden">
             <div>Arrow Keys: Move | Space: Jump | X: Fireball (when big) | I: Fullscreen</div>
             <div>Hit question blocks for coins and mushrooms! Stomp or burn Goombas!</div>
         </div>
-        <div class="controls">Press R to restart | Reach both flags at the end!</div>
+        <div class="controls hidden">Press R to restart | Reach both flags at the end!</div>
     </div>
 
     <script>
@@ -93,6 +147,11 @@
         // Keys pressed
         const keys = {};
 
+        // Character selection
+        let selectedCharacter = null;
+        let selectedCharacterName = '';
+        let selectedCharacterColor = '';
+
         // Game state
         let score = 0;
         let levelComplete = false;
@@ -106,6 +165,7 @@
         let gameTime = 0;
         let marioInCastle = false;
         let isFullscreen = false;
+        let gameStarted = false;
 
         // Player class
         class Player {
@@ -1364,8 +1424,8 @@
             }
         }
 
-        // Create player (Mario)
-        const mario = new Player(100, 100, '#ff0000');
+        // Player will be created after character selection
+        let player = null;
 
         // Create long level with platforms
         const platforms = [
@@ -1513,7 +1573,7 @@
             }
             // Shoot fireball with 'X' key (only when big)
             if (e.key === 'x' || e.key === 'X') {
-                mario.shootFireball();
+                if (player) player.shootFireball();
             }
             // Toggle fullscreen with 'I' key
             if (e.key === 'i' || e.key === 'I') {
@@ -1575,7 +1635,7 @@
 
             // Update and draw coins
             coins.forEach(coin => {
-                if (coin.checkCollection(mario)) {
+                if (coin.checkCollection(player)) {
                     score += 10;
                 }
                 coin.draw();
@@ -1584,8 +1644,8 @@
             // Update and draw mushrooms
             mushrooms.forEach(mushroom => {
                 mushroom.update();
-                if (mushroom.checkCollection(mario)) {
-                    mario.isBig = true;
+                if (mushroom.checkCollection(player)) {
+                    player.isBig = true;
                     score += 100;
                 }
                 mushroom.draw();
@@ -1594,22 +1654,22 @@
             // Update and draw Goombas
             goombas.forEach(goomba => {
                 goomba.update();
-                const collision = goomba.checkPlayerCollision(mario);
+                const collision = goomba.checkPlayerCollision(player);
                 if (collision === 'stomp') {
                     goomba.stomp();
-                    mario.velocityY = -8; // Bounce on enemy
+                    player.velocityY = -8; // Bounce on enemy
                     score += 50;
-                } else if (collision === 'hit' && !mario.enteringCastle && !mario.slidingFlag) {
-                    // Mario got hit - shrink if big, otherwise lose a life
-                    if (mario.isBig) {
-                        mario.isBig = false;
+                } else if (collision === 'hit' && !player.enteringCastle && !player.slidingFlag) {
+                    // Player got hit - shrink if big, otherwise lose a life
+                    if (player.isBig) {
+                        player.isBig = false;
                     } else {
                         deaths++;
                         // Respawn at last safe position
-                        mario.x = lastSafePosition.x;
-                        mario.y = lastSafePosition.y;
-                        mario.velocityX = 0;
-                        mario.velocityY = 0;
+                        player.x = lastSafePosition.x;
+                        player.y = lastSafePosition.y;
+                        player.velocityX = 0;
+                        player.velocityY = 0;
                     }
                 }
                 goomba.draw();
@@ -1640,8 +1700,8 @@
             dualFlagPole.draw();
 
             // Check if player reached flag pole and start sliding
-            if (dualFlagPole.checkReached(mario) && !dualFlagPole.bowserSliding) {
-                dualFlagPole.startSliding(mario);
+            if (dualFlagPole.checkReached(player) && !dualFlagPole.bowserSliding) {
+                dualFlagPole.startSliding(player);
             }
 
             // Update flag pole sliding animation
@@ -1653,22 +1713,22 @@
             }
 
             // Check if player reached flag and both flags completed
-            if (dualFlagPole.checkReached(mario) && !flagReached && dualFlagPole.isBowserAtBottom()) {
+            if (dualFlagPole.checkReached(player) && !flagReached && dualFlagPole.isBowserAtBottom()) {
                 flagReached = true;
             }
 
-            // When Mario flag reaches top, start Mario auto-run
+            // When Mario flag reaches top, start player auto-run
             if (flagReached && dualFlagPole.isMarioAtTop() && !marioRunning) {
                 marioRunning = true;
             }
 
-            // Check if Mario entered castle
-            if (marioRunning && castle.checkEntry(mario) && !marioInCastle && !mario.enteringCastle) {
-                mario.enteringCastle = true;
+            // Check if player entered castle
+            if (marioRunning && castle.checkEntry(player) && !marioInCastle && !player.enteringCastle) {
+                player.enteringCastle = true;
             }
 
-            // When Mario fully entered castle (animation complete), trigger level complete
-            if (mario.enteringCastle && mario.castleEntryProgress >= 1 && !levelComplete) {
+            // When player fully entered castle (animation complete), trigger level complete
+            if (player.enteringCastle && player.castleEntryProgress >= 1 && !levelComplete) {
                 marioInCastle = true;
                 levelComplete = true;
                 gameTime = Math.floor((Date.now() - gameStartTime) / 1000);
@@ -1692,8 +1752,8 @@
             });
 
             // Update and draw player (always draw, fade happens in draw method)
-            mario.update();
-            mario.draw();
+            player.update();
+            player.draw();
 
             // Draw UI
             ctx.fillStyle = '#fff';
@@ -1720,7 +1780,7 @@
             ctx.fillText(`Deaths: ${deaths}`, 20, 90);
 
             // Draw distance indicator
-            const distance = Math.floor((mario.x / LEVEL_WIDTH) * 100);
+            const distance = Math.floor((player.x / LEVEL_WIDTH) * 100);
             ctx.fillText(`Progress: ${distance}%`, canvas.width - 200, 30);
 
             // Level complete message
@@ -1744,8 +1804,33 @@
             }
         }
 
-        // Start game
-        gameLoop();
+        // Character selection function
+        function selectCharacter(character) {
+            selectedCharacter = character;
+            if (character === 'mario') {
+                selectedCharacterName = 'MARIO';
+                selectedCharacterColor = '#ff0000';
+            } else {
+                selectedCharacterName = 'LUIGI';
+                selectedCharacterColor = '#00aa00';
+            }
+
+            // Create player with selected character
+            player = new Player(100, 100, selectedCharacterColor);
+
+            // Hide character select, show game
+            document.getElementById('characterSelect').classList.add('hidden');
+            document.getElementById('gameCanvas').classList.remove('hidden');
+            document.getElementById('info').classList.remove('hidden');
+            document.querySelector('.controls').classList.remove('hidden');
+
+            // Start the game
+            gameStarted = true;
+            gameStartTime = Date.now();
+            gameLoop();
+        }
+
+        // Don't start game automatically - wait for character selection
     </script>
 </body>
 </html>
