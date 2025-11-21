@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mario and Luigi Classic - Stage 2: Desert</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #FFB84D 0%, #FFD699 50%, #F4A460 100%);
+            font-family: 'Courier New', monospace;
+        }
+        #gameContainer {
+            text-align: center;
+        }
+        canvas {
+            border: 4px solid #8B4513;
+            background: linear-gradient(180deg, #FFB84D 0%, #FFD699 70%, #F4A460 70%);
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        #info {
+            color: white;
+            margin-top: 10px;
+            font-size: 14px;
+            text-shadow: 2px 2px 0px #000;
+        }
+        .title {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-shadow: 3px 3px 0px #000;
+        }
+        .stage-title {
+            color: #ffff00;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 0px #8B4513;
+        }
+        #characterSelect {
+            background: rgba(139, 69, 19, 0.9);
+            padding: 40px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+        #characterSelect h2 {
+            color: #ffff00;
+            font-size: 32px;
+            margin-bottom: 30px;
+            text-shadow: 3px 3px 0px #000;
+        }
+        .character-buttons {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+        }
+        .character-btn {
+            width: 200px;
+            padding: 20px;
+            font-size: 24px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            border: 4px solid #fff;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            text-shadow: 2px 2px 0px #000;
+        }
+        .character-btn:hover {
+            transform: scale(1.1);
+        }
+        .character-btn.mario {
+            background: linear-gradient(135deg, #ff0000, #cc0000);
+            color: white;
+        }
+        .character-btn.luigi {
+            background: linear-gradient(135deg, #00aa00, #008800);
+            color: white;
+        }
+        .hidden {
+            display: none;
+        }
+        .stage-nav {
+            margin-top: 20px;
+        }
+        .stage-nav a {
+            color: #ffff00;
+            margin: 0 10px;
+            text-decoration: none;
+            font-weight: bold;
+            text-shadow: 2px 2px 0px #000;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div class="title">MARIO AND LUIGI CLASSIC</div>
+        <div class="stage-title">STAGE 2: DESERT ADVENTURE</div>
+
+        <div id="characterSelect">
+            <h2>SELECT YOUR CHARACTER</h2>
+            <div class="character-buttons">
+                <button class="character-btn mario" onclick="selectCharacter('mario')">MARIO</button>
+                <button class="character-btn luigi" onclick="selectCharacter('luigi')">LUIGI</button>
+            </div>
+        </div>
+
+        <canvas id="gameCanvas" width="800" height="600" class="hidden"></canvas>
+        <div id="info" class="hidden">
+            <div>Desert Stage! Watch out for cacti! Press Y near Yoshi to ride!</div>
+        </div>
+        <div class="stage-nav">
+            <a href="index.html">← Stage 1</a>
+            <a href="stage3.html">Stage 3 →</a>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const GRAVITY = 0.5;
+        const JUMP_STRENGTH = -12;
+        const MOVE_SPEED = 5;
+        const PLAYER_WIDTH = 32;
+        const PLAYER_HEIGHT = 48;
+        const LEVEL_WIDTH = 6000;
+
+        let camera = { x: 0, y: 0 };
+        let keys = {};
+        let score = 0;
+        let player = null;
+        let gameStarted = false;
+        let levelComplete = false;
+        let progressX = 5800; // Position where level completes
+
+        class Player {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.width = PLAYER_WIDTH;
+                this.height = PLAYER_HEIGHT;
+                this.velocityX = 0;
+                this.velocityY = 0;
+                this.color = color;
+                this.onGround = false;
+                this.direction = 1;
+                this.animationFrame = 0;
+                this.ridingYoshi = null;
+                this.drivingKart = null;
+            }
+
+            draw() {
+                // Don't draw if riding Yoshi or driving Kart
+                if (this.ridingYoshi || this.drivingKart) return;
+
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
+                if (Math.abs(this.velocityX) > 0 && this.onGround) {
+                    this.animationFrame += 0.2;
+                }
+
+                const legOffset = Math.sin(this.animationFrame) * 5;
+
+                ctx.save();
+                if (this.direction === -1) {
+                    ctx.translate(screenX + this.width, screenY);
+                    ctx.scale(-1, 1);
+                    ctx.translate(-screenX, -screenY);
+                }
+
+                // Hat
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.ellipse(screenX + 16, screenY + 6, 10, 7, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(screenX + 16, screenY + 10, 12, 4, 0, 0, Math.PI);
+                ctx.fill();
+
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 10px Arial';
+                const hatLetter = this.color === '#00aa00' ? 'L' : 'M';
+                ctx.fillText(hatLetter, screenX + 13, screenY + 9);
+
+                // Head
+                ctx.fillStyle = '#ffcc99';
+                ctx.beginPath();
+                ctx.arc(screenX + 16, screenY + 18, 9, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Eye
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 20, screenY + 16, 4, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#4169E1';
+                ctx.beginPath();
+                ctx.arc(screenX + 21, screenY + 16, 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(screenX + 22, screenY + 16, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Nose
+                ctx.fillStyle = '#ffaa88';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 23, screenY + 19, 3, 4, 0.3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Mustache
+                ctx.fillStyle = '#4a2511';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 20, screenY + 22, 7, 3, 0, 0, Math.PI);
+                ctx.fill();
+
+                // Body
+                ctx.fillStyle = this.color;
+                ctx.fillRect(screenX + 10, screenY + 24, 14, 10);
+
+                // Overalls
+                ctx.fillStyle = '#1E90FF';
+                ctx.fillRect(screenX + 9, screenY + 32, 16, 12);
+
+                // Legs - FIXED for proper ground contact
+                ctx.fillStyle = '#1E90FF';
+                ctx.lineWidth = 6;
+                ctx.lineCap = 'round';
+
+                // Front leg
+                ctx.beginPath();
+                ctx.moveTo(screenX + 18, screenY + 43);
+                ctx.lineTo(screenX + 18, screenY + 46 + legOffset);
+                ctx.stroke();
+
+                // Back leg
+                ctx.beginPath();
+                ctx.moveTo(screenX + 14, screenY + 43);
+                ctx.lineTo(screenX + 12, screenY + 46 - legOffset);
+                ctx.stroke();
+
+                // Shoes
+                ctx.fillStyle = '#8B4513';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 20, screenY + 46 + legOffset, 6, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(screenX + 11, screenY + 46 - legOffset, 6, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            update() {
+                // Update mount if riding
+                if (this.ridingYoshi) {
+                    this.x = this.ridingYoshi.x;
+                    this.y = this.ridingYoshi.y - this.height;
+                    return;
+                }
+
+                // Update if driving Kart
+                if (this.drivingKart) {
+                    return;
+                }
+
+                if (keys['ArrowLeft']) {
+                    this.velocityX = -MOVE_SPEED;
+                    this.direction = -1;
+                } else if (keys['ArrowRight']) {
+                    this.velocityX = MOVE_SPEED;
+                    this.direction = 1;
+                } else {
+                    this.velocityX = 0;
+                }
+
+                if (keys[' '] && this.onGround) {
+                    this.velocityY = JUMP_STRENGTH;
+                    this.onGround = false;
+                }
+
+                this.velocityY += GRAVITY;
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+
+                if (this.x < 0) this.x = 0;
+                if (this.x + this.width > LEVEL_WIDTH) this.x = LEVEL_WIDTH - this.width;
+
+                // Fixed: Prevent getting stuck in sand - hard ground at 550
+                if (this.y > 600) {
+                    this.x = 100;
+                    this.y = 400;
+                    this.velocityX = 0;
+                    this.velocityY = 0;
+                }
+
+                // Check level completion
+                if (this.x >= progressX && !levelComplete) {
+                    levelComplete = true;
+                    setTimeout(() => {
+                        window.location.href = 'stage3.html';
+                    }, 2000);
+                }
+
+                this.onGround = false;
+                platforms.forEach(platform => {
+                    if (this.checkCollision(platform)) {
+                        if (this.velocityY > 0 && this.y + this.height - this.velocityY <= platform.y) {
+                            this.y = platform.y - this.height;
+                            this.velocityY = 0;
+                            this.onGround = true;
+                        }
+                    }
+                });
+
+                camera.x = this.x - canvas.width / 3;
+                if (camera.x < 0) camera.x = 0;
+                if (camera.x > LEVEL_WIDTH - canvas.width) camera.x = LEVEL_WIDTH - canvas.width;
+            }
+
+            checkCollision(platform) {
+                return this.x < platform.x + platform.width &&
+                       this.x + this.width > platform.x &&
+                       this.y < platform.y + platform.height &&
+                       this.y + this.height > platform.y;
+            }
+        }
+
+        class Platform {
+            constructor(x, y, width, height, color = '#D2691E') {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.color = color;
+            }
+
+            draw() {
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+                if (screenX + this.width < 0 || screenX > canvas.width) return;
+
+                ctx.fillStyle = this.color;
+                ctx.fillRect(screenX, screenY, this.width, this.height);
+
+                // Sand texture
+                ctx.fillStyle = '#F4A460';
+                for (let i = 0; i < this.width; i += 20) {
+                    for (let j = 0; j < this.height; j += 20) {
+                        ctx.fillRect(screenX + i + Math.random() * 5, screenY + j + Math.random() * 5, 3, 3);
+                    }
+                }
+            }
+        }
+
+        class Cactus {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 30;
+                this.height = 60;
+            }
+
+            draw() {
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
+                // Main cactus body
+                ctx.fillStyle = '#228B22';
+                ctx.fillRect(screenX + 10, screenY, 10, this.height);
+
+                // Arms
+                ctx.fillRect(screenX, screenY + 15, 10, 5);
+                ctx.fillRect(screenX, screenY + 15, 5, 15);
+                ctx.fillRect(screenX + 20, screenY + 20, 10, 5);
+                ctx.fillRect(screenX + 25, screenY + 20, 5, 15);
+
+                // Spikes
+                ctx.fillStyle = '#006400';
+                for (let i = 0; i < this.height; i += 8) {
+                    ctx.fillRect(screenX + 8, screenY + i, 2, 4);
+                    ctx.fillRect(screenX + 20, screenY + i + 4, 2, 4);
+                }
+            }
+
+            checkCollision(player) {
+                return player.x < this.x + this.width &&
+                       player.x + player.width > this.x &&
+                       player.y < this.y + this.height &&
+                       player.y + player.height > this.y;
+            }
+        }
+
+        // Kart class - drivable vehicle
+        class Kart {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 60;
+                this.height = 40;
+                this.velocityX = 0;
+                this.velocityY = 0;
+                this.driving = false;
+                this.driver = null;
+                this.direction = 1;
+                this.onGround = false;
+                this.speed = 5;
+                this.wheelRotation = 0;
+            }
+
+            draw() {
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+                if (screenX + this.width < -50 || screenX > canvas.width + 50) return;
+
+                ctx.save();
+                if (this.direction === -1) {
+                    ctx.translate(screenX + this.width, screenY);
+                    ctx.scale(-1, 1);
+                    ctx.translate(-screenX, -screenY);
+                }
+
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(screenX + 10, screenY + 10, 40, 20);
+                ctx.beginPath();
+                ctx.moveTo(screenX + 50, screenY + 15);
+                ctx.lineTo(screenX + 55, screenY + 20);
+                ctx.lineTo(screenX + 50, screenY + 25);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = 'rgba(100, 200, 255, 0.6)';
+                ctx.fillRect(screenX + 15, screenY + 12, 20, 10);
+
+                ctx.fillStyle = '#333';
+                ctx.save();
+                ctx.translate(screenX + 15, screenY + 30);
+                ctx.rotate(this.wheelRotation);
+                ctx.fillRect(-5, -5, 10, 10);
+                ctx.restore();
+
+                ctx.save();
+                ctx.translate(screenX + 45, screenY + 30);
+                ctx.rotate(this.wheelRotation);
+                ctx.fillRect(-5, -5, 10, 10);
+                ctx.restore();
+
+                ctx.fillStyle = '#888';
+                ctx.beginPath();
+                ctx.arc(screenX + 15, screenY + 30, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(screenX + 45, screenY + 30, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (this.driving && this.driver) {
+                    const driverX = screenX + 20;
+                    const driverY = screenY + 5;
+                    ctx.fillStyle = this.driver.color;
+                    ctx.beginPath();
+                    ctx.ellipse(driverX + 8, driverY + 3, 6, 4, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 8px Arial';
+                    const driverLetter = this.driver.color === '#00aa00' ? 'L' : 'M';
+                    ctx.fillText(driverLetter, driverX + 6, driverY + 5);
+                    ctx.fillStyle = '#ffcc99';
+                    ctx.beginPath();
+                    ctx.arc(driverX + 8, driverY + 10, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+
+            update() {
+                this.velocityY += 0.5;
+                this.onGround = false;
+                platforms.forEach(platform => {
+                    if (this.velocityY >= 0 &&
+                        this.x + this.width > platform.x &&
+                        this.x < platform.x + platform.width &&
+                        this.y + this.height <= platform.y &&
+                        this.y + this.height + this.velocityY >= platform.y) {
+                        this.y = platform.y - this.height;
+                        this.velocityY = 0;
+                        this.onGround = true;
+                    }
+                });
+
+                if (this.y + this.height >= 550) {
+                    this.y = 550 - this.height;
+                    this.velocityY = 0;
+                    this.onGround = true;
+                }
+
+                if (this.driving && this.driver) {
+                    if (keys['ArrowLeft']) {
+                        this.velocityX = -this.speed;
+                        this.direction = -1;
+                    } else if (keys['ArrowRight']) {
+                        this.velocityX = this.speed;
+                        this.direction = 1;
+                    } else {
+                        this.velocityX *= 0.9;
+                    }
+
+                    if (Math.abs(this.velocityX) > 0.5) {
+                        this.wheelRotation += this.velocityX * 0.1;
+                    }
+
+                    this.driver.x = this.x + 10;
+                    this.driver.y = this.y - 10;
+                    this.driver.velocityX = this.velocityX;
+                    this.driver.velocityY = this.velocityY;
+                    this.driver.direction = this.direction;
+                } else {
+                    this.velocityX *= 0.95;
+                }
+
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+
+                if (this.x < 0) {
+                    this.x = 0;
+                    this.velocityX = 0;
+                }
+                if (this.x + this.width > LEVEL_WIDTH) {
+                    this.x = LEVEL_WIDTH - this.width;
+                    this.velocityX = 0;
+                }
+            }
+
+            checkPlayerCollision(player) {
+                const distance = Math.abs(player.x - this.x);
+                return distance < 60 && Math.abs(player.y - this.y) < 50;
+            }
+
+            checkGoombaCollision(goomba) {
+                if (Math.abs(this.velocityX) > 1) {
+                    return this.x < goomba.x + goomba.width &&
+                           this.x + this.width > goomba.x &&
+                           this.y < goomba.y + goomba.height &&
+                           this.y + this.height > goomba.y;
+                }
+                return false;
+            }
+        }
+
+        // Yoshi class
+        class Yoshi {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 48;
+                this.height = 48;
+                this.velocityX = 2;
+                this.velocityY = 0;
+                this.mounted = false;
+                this.rider = null;
+                this.direction = 1;
+                this.animationFrame = 0;
+                this.onGround = false;
+            }
+
+            draw() {
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
+                this.animationFrame += 0.1;
+
+                ctx.save();
+                if (this.direction === -1) {
+                    ctx.translate(screenX + this.width, screenY);
+                    ctx.scale(-1, 1);
+                    ctx.translate(-screenX, -screenY);
+                }
+
+                // Body (green)
+                ctx.fillStyle = '#00ff00';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 24, screenY + 30, 20, 15, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Head
+                ctx.beginPath();
+                ctx.ellipse(screenX + 32, screenY + 18, 12, 14, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Snout
+                ctx.fillStyle = '#00dd00';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 38, screenY + 18, 8, 6, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Eye
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(screenX + 34, screenY + 14, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(screenX + 35, screenY + 14, 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Saddle
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(screenX + 18, screenY + 24, 16, 8);
+
+                // Shell spots
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath();
+                ctx.arc(screenX + 20, screenY + 28, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(screenX + 28, screenY + 32, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Legs
+                const legOffset = Math.sin(this.animationFrame) * 3;
+                ctx.fillStyle = '#00dd00';
+                ctx.fillRect(screenX + 14, screenY + 42 + legOffset, 6, 6);
+                ctx.fillRect(screenX + 28, screenY + 42 - legOffset, 6, 6);
+
+                // Draw rider if mounted
+                if (this.mounted && this.rider) {
+                    const riderX = screenX + 12;
+                    const riderY = screenY + 8;
+                    // Simple rider representation
+                    ctx.fillStyle = this.rider.color;
+                    ctx.fillRect(riderX, riderY, 20, 20);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 12px Arial';
+                    const riderLetter = this.rider.color === '#00aa00' ? 'L' : 'M';
+                    ctx.fillText(riderLetter, riderX + 6, riderY + 14);
+                }
+
+                ctx.restore();
+            }
+
+            update() {
+                if (this.mounted && this.rider) {
+                    // Rider controls Yoshi
+                    if (keys['ArrowLeft']) {
+                        this.velocityX = -MOVE_SPEED;
+                        this.direction = -1;
+                    } else if (keys['ArrowRight']) {
+                        this.velocityX = MOVE_SPEED;
+                        this.direction = 1;
+                    } else {
+                        this.velocityX = 0;
+                    }
+
+                    if (keys[' '] && this.onGround) {
+                        this.velocityY = JUMP_STRENGTH;
+                        this.onGround = false;
+                    }
+
+                    // Dismount with Y key
+                    if (keys['y'] || keys['Y']) {
+                        this.rider.ridingYoshi = null;
+                        this.rider.y = this.y - this.rider.height;
+                        this.mounted = false;
+                        this.rider = null;
+                        keys['y'] = false;
+                        keys['Y'] = false;
+                    }
+                } else {
+                    // Wander slowly
+                    if (Math.random() < 0.01) {
+                        this.velocityX = -this.velocityX;
+                        this.direction = -this.direction;
+                    }
+                }
+
+                this.velocityY += GRAVITY;
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+
+                // Platform collision
+                this.onGround = false;
+                platforms.forEach(platform => {
+                    if (this.checkCollision(platform)) {
+                        if (this.velocityY > 0 && this.y + this.height - this.velocityY <= platform.y) {
+                            this.y = platform.y - this.height;
+                            this.velocityY = 0;
+                            this.onGround = true;
+                        }
+                    }
+                });
+            }
+
+            checkCollision(platform) {
+                return this.x < platform.x + platform.width &&
+                       this.x + this.width > platform.x &&
+                       this.y < platform.y + platform.height &&
+                       this.y + this.height > platform.y;
+            }
+
+            checkPlayerCollision(player) {
+                if (this.mounted) return false;
+                return player.x < this.x + this.width &&
+                       player.x + player.width > this.x &&
+                       player.y < this.y + this.height &&
+                       player.y + player.height > this.y;
+            }
+        }
+
+        const platforms = [
+            new Platform(0, 550, 1000, 50, '#D2691E'),
+            new Platform(1100, 550, 800, 50, '#D2691E'),
+            new Platform(2000, 550, 1000, 50, '#D2691E'),
+            new Platform(3100, 550, 900, 50, '#D2691E'),
+            new Platform(4100, 550, 1900, 50, '#D2691E'),
+            new Platform(300, 450, 120, 20, '#CD853F'),
+            new Platform(500, 400, 100, 20, '#CD853F'),
+            new Platform(800, 450, 140, 20, '#CD853F'),
+            new Platform(1200, 400, 120, 20, '#CD853F'),
+            new Platform(1600, 350, 100, 20, '#CD853F'),
+        ];
+
+        const cacti = [
+            new Cactus(400, 490),
+            new Cactus(700, 490),
+            new Cactus(1300, 490),
+            new Cactus(1800, 490),
+            new Cactus(2500, 490),
+        ];
+
+        // Kart at the beginning
+        const karts = [
+            new Kart(300, 500)
+        ];
+
+        // Yoshi at the beginning
+        const yoshis = [
+            new Yoshi(200, 500)
+        ];
+
+        function drawDesertBackground() {
+            // Sun
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(canvas.width - 100, 80, 40, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Sand dunes (parallax)
+            ctx.fillStyle = 'rgba(244, 164, 96, 0.5)';
+            for (let i = 0; i < 10; i++) {
+                const duneX = (i * 300) - (camera.x * 0.3);
+                ctx.beginPath();
+                ctx.ellipse(duneX, 400, 150, 50, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawDesertBackground();
+            platforms.forEach(p => p.draw());
+            
+            // Update and draw Karts
+            karts.forEach(kart => {
+                kart.update();
+                kart.draw();
+                
+                // Check for entering/exiting kart
+                if ((keys['k'] || keys['K']) && !player.ridingYoshi) {
+                    if (player.drivingKart) {
+                        player.drivingKart = null;
+                        kart.driving = false;
+                        kart.driver = null;
+                        player.x = kart.x + kart.width + 10;
+                        player.y = kart.y;
+                        keys['k'] = false;
+                        keys['K'] = false;
+                    } else if (kart.checkPlayerCollision(player) && !kart.driving) {
+                        player.drivingKart = kart;
+                        kart.driving = true;
+                        kart.driver = player;
+                        keys['k'] = false;
+                        keys['K'] = false;
+                    }
+                }
+
+                // Check if kart hits Goombas
+                goombas.forEach(goomba => {
+                    if (!goomba.stomped && kart.checkGoombaCollision(goomba)) {
+                        goomba.stomp();
+                        score += 100;
+                    }
+                });
+            });
+            
+            // Draw Yoshi
+            yoshis.forEach(yoshi => {
+                yoshi.update();
+                yoshi.draw();
+                
+                // Check for mounting
+                if ((keys['y'] || keys['Y']) && !player.ridingYoshi) {
+                    if (yoshi.checkPlayerCollision(player) && !yoshi.mounted) {
+                        player.ridingYoshi = yoshi;
+                        yoshi.mounted = true;
+                        yoshi.rider = player;
+                        keys['y'] = false;
+                        keys['Y'] = false;
+                    }
+                }
+            });
+
+            cacti.forEach(c => {
+                c.draw();
+                if (c.checkCollision(player)) {
+                    player.x = 100;
+                    player.y = 400;
+                    score = Math.max(0, score - 50);
+                }
+            });
+
+            player.update();
+            player.draw();
+
+            // Level complete message
+            if (levelComplete) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#FFD700';
+                ctx.font = 'bold 48px Courier New';
+                ctx.fillText('STAGE COMPLETE!', canvas.width / 2 - 250, canvas.height / 2);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 24px Courier New';
+                ctx.fillText('Moving to Stage 3...', canvas.width / 2 - 150, canvas.height / 2 + 50);
+            }
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 24px Courier New';
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.strokeText(`Score: ${score}`, 20, 30);
+            ctx.fillText(`Score: ${score}`, 20, 30);
+            ctx.strokeText(`Stage 2: Desert`, canvas.width - 200, 30);
+            ctx.fillText(`Stage 2: Desert`, canvas.width - 200, 30);
+
+            // Progress indicator
+            const progress = Math.floor((player.x / LEVEL_WIDTH) * 100);
+            ctx.strokeText(`Progress: ${progress}%`, 20, 60);
+            ctx.fillText(`Progress: ${progress}%`, 20, 60);
+
+            // Yoshi indicator
+            if (player.ridingYoshi) {
+                ctx.fillStyle = '#00ff00';
+                ctx.strokeText('RIDING YOSHI (Y to dismount)', 20, 90);
+                ctx.fillText('RIDING YOSHI (Y to dismount)', 20, 90);
+            }
+
+            if (!levelComplete) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function selectCharacter(character) {
+            const color = character === 'mario' ? '#ff0000' : '#00aa00';
+            player = new Player(100, 100, color);
+
+            document.getElementById('characterSelect').classList.add('hidden');
+            document.getElementById('gameCanvas').classList.remove('hidden');
+            document.getElementById('info').classList.remove('hidden');
+
+            gameStarted = true;
+            gameLoop();
+        }
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (e.key === 'r' || e.key === 'R') location.reload();
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+    </script>
+</body>
+</html>

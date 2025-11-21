@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mario and Luigi Brotherships</title>
+    <title>Mario and Luigi Classic World</title>
     <style>
         body {
             margin: 0;
@@ -100,7 +100,8 @@
 </head>
 <body>
     <div id="gameContainer">
-        <div class="title">MARIO AND LUIGI BROTHERSHIPS</div>
+        <div class="title">MARIO AND LUIGI CLASSIC</div>
+        <div class="stage-title" style="color: #ffff00; font-size: 20px; font-weight: bold; margin-bottom: 10px; text-shadow: 2px 2px 0px #000;">STAGE 1: GRASSLAND</div>
         <div class="authors">
             <div class="authors-title">Created by:</div>
             <div>Mohammad Musa</div>
@@ -120,10 +121,14 @@
 
         <canvas id="gameCanvas" width="800" height="600" class="hidden"></canvas>
         <div id="info" class="hidden">
-            <div>Arrow Keys: Move | Space: Jump | X: Fireball (when big) | I: Fullscreen</div>
+            <div>Arrow Keys: Move | Space: Jump | X: Fireball (when big) | I: Fullscreen | R: Restart</div>
             <div>Hit question blocks for coins and mushrooms! Stomp or burn Goombas!</div>
         </div>
-        <div class="controls hidden">Press R to restart | Reach both flags at the end!</div>
+        <div class="controls hidden">Press R to restart | Press K to drive Kart | Press Y to ride Yoshi | Reach both flags at the end!</div>
+        <div class="stage-nav" style="margin-top: 20px;">
+            <a href="stage2.html" style="color: #ffff00; margin: 0 10px;">Stage 2: Desert</a>
+            <a href="stage3.html" style="color: #ffff00; margin: 0 10px;">Stage 3: Castle</a>
+        </div>
     </div>
 
     <script>
@@ -185,6 +190,8 @@
                 this.enteringCastle = false;
                 this.castleEntryProgress = 0;
                 this.fireballCooldown = 0;
+                this.ridingYoshi = null;
+                this.drivingKart = null;
             }
 
             shootFireball() {
@@ -197,6 +204,9 @@
             }
 
             draw() {
+                // Don't draw if riding Yoshi (Yoshi will draw the rider) or driving Kart
+                if (this.ridingYoshi || this.drivingKart) return;
+
                 const screenX = this.x - camera.x;
                 const screenY = this.y - camera.y;
 
@@ -245,10 +255,11 @@
                 ctx.ellipse(screenX + 16, screenY + 10 + yOffset, 12 * hatScale, 4 * hatScale, 0, 0, Math.PI);
                 ctx.fill();
 
-                // Hat badge (M)
+                // Hat badge (M for Mario, L for Luigi)
                 ctx.fillStyle = '#fff';
                 ctx.font = `bold ${10 * hatScale}px Arial`;
-                ctx.fillText('M', screenX + 13, screenY + 9 + yOffset);
+                const hatLetter = this.color === '#00aa00' ? 'L' : 'M';
+                ctx.fillText(hatLetter, screenX + 13, screenY + 9 + yOffset);
 
                 // Head (round, skin color)
                 ctx.fillStyle = '#ffcc99';
@@ -366,33 +377,36 @@
                 ctx.lineTo(screenX + 6, screenY + 36 + yOffset - armOffset);
                 ctx.stroke();
 
-                // Legs with running animation
+                // Legs with running animation - FIXED to touch ground properly
                 ctx.fillStyle = '#1E90FF';
                 ctx.lineWidth = 6;
+
+                // Calculate proper ground level (feet should touch the platform)
+                const groundAdjustment = this.isBig ? 2 : 0; // Adjust for big Mario
 
                 // Front leg
                 ctx.beginPath();
                 ctx.moveTo(screenX + 18, screenY + 43 + yOffset);
-                ctx.lineTo(screenX + 18, screenY + 48 + yOffset + legOffset);
+                ctx.lineTo(screenX + 18, screenY + 46 + yOffset + legOffset + groundAdjustment);
                 ctx.stroke();
 
                 // Back leg
                 ctx.beginPath();
                 ctx.moveTo(screenX + 14, screenY + 43 + yOffset);
-                ctx.lineTo(screenX + 12, screenY + 48 + yOffset - legOffset);
+                ctx.lineTo(screenX + 12, screenY + 46 + yOffset - legOffset + groundAdjustment);
                 ctx.stroke();
 
-                // Shoes (brown boots)
+                // Shoes (brown boots) - positioned at the end of legs
                 ctx.fillStyle = '#8B4513';
 
                 // Front shoe
                 ctx.beginPath();
-                ctx.ellipse(screenX + 20, screenY + 48 + yOffset + legOffset, 6, 3, 0, 0, Math.PI * 2);
+                ctx.ellipse(screenX + 20, screenY + 46 + yOffset + legOffset + groundAdjustment, 6, 3, 0, 0, Math.PI * 2);
                 ctx.fill();
 
                 // Back shoe
                 ctx.beginPath();
-                ctx.ellipse(screenX + 11, screenY + 48 + yOffset - legOffset, 6, 3, 0, 0, Math.PI * 2);
+                ctx.ellipse(screenX + 11, screenY + 46 + yOffset - legOffset + groundAdjustment, 6, 3, 0, 0, Math.PI * 2);
                 ctx.fill();
 
                 ctx.restore();
@@ -402,6 +416,19 @@
                 // Decrease fireball cooldown
                 if (this.fireballCooldown > 0) {
                     this.fireballCooldown--;
+                }
+
+                // Update mount if riding Yoshi
+                if (this.ridingYoshi) {
+                    this.x = this.ridingYoshi.x;
+                    this.y = this.ridingYoshi.y - this.height;
+                    return;
+                }
+
+                // Update if driving Kart
+                if (this.drivingKart) {
+                    // Position is controlled by kart
+                    return;
                 }
 
                 // Don't update if sliding on flag
@@ -1424,6 +1451,371 @@
             }
         }
 
+        // Kart class - drivable vehicle
+        class Kart {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 60;
+                this.height = 40;
+                this.velocityX = 0;
+                this.velocityY = 0;
+                this.driving = false;
+                this.driver = null;
+                this.direction = 1;
+                this.onGround = false;
+                this.speed = 5;
+                this.wheelRotation = 0;
+            }
+
+            draw() {
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
+                // Only draw if on screen
+                if (screenX + this.width < -50 || screenX > canvas.width + 50) return;
+
+                ctx.save();
+                if (this.direction === -1) {
+                    ctx.translate(screenX + this.width, screenY);
+                    ctx.scale(-1, 1);
+                    ctx.translate(-screenX, -screenY);
+                }
+
+                // Kart body (red)
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(screenX + 10, screenY + 10, 40, 20);
+                
+                // Kart front
+                ctx.beginPath();
+                ctx.moveTo(screenX + 50, screenY + 15);
+                ctx.lineTo(screenX + 55, screenY + 20);
+                ctx.lineTo(screenX + 50, screenY + 25);
+                ctx.closePath();
+                ctx.fill();
+
+                // Windshield
+                ctx.fillStyle = 'rgba(100, 200, 255, 0.6)';
+                ctx.fillRect(screenX + 15, screenY + 12, 20, 10);
+
+                // Wheels (black with rotation)
+                ctx.fillStyle = '#333';
+                ctx.save();
+                ctx.translate(screenX + 15, screenY + 30);
+                ctx.rotate(this.wheelRotation);
+                ctx.fillRect(-5, -5, 10, 10);
+                ctx.restore();
+
+                ctx.save();
+                ctx.translate(screenX + 45, screenY + 30);
+                ctx.rotate(this.wheelRotation);
+                ctx.fillRect(-5, -5, 10, 10);
+                ctx.restore();
+
+                // Wheel rims
+                ctx.fillStyle = '#888';
+                ctx.beginPath();
+                ctx.arc(screenX + 15, screenY + 30, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(screenX + 45, screenY + 30, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw driver if present
+                if (this.driving && this.driver) {
+                    const driverX = screenX + 20;
+                    const driverY = screenY + 5;
+                    
+                    // Driver hat
+                    ctx.fillStyle = this.driver.color;
+                    ctx.beginPath();
+                    ctx.ellipse(driverX + 8, driverY + 3, 6, 4, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Hat letter
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 8px Arial';
+                    const driverLetter = this.driver.color === '#00aa00' ? 'L' : 'M';
+                    ctx.fillText(driverLetter, driverX + 6, driverY + 5);
+                    
+                    // Driver head
+                    ctx.fillStyle = '#ffcc99';
+                    ctx.beginPath();
+                    ctx.arc(driverX + 8, driverY + 10, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+
+            update() {
+                // Apply gravity
+                this.velocityY += 0.5;
+
+                // Check platform collisions
+                this.onGround = false;
+                platforms.forEach(platform => {
+                    if (this.velocityY >= 0 &&
+                        this.x + this.width > platform.x &&
+                        this.x < platform.x + platform.width &&
+                        this.y + this.height <= platform.y &&
+                        this.y + this.height + this.velocityY >= platform.y) {
+                        
+                        this.y = platform.y - this.height;
+                        this.velocityY = 0;
+                        this.onGround = true;
+                    }
+                });
+
+                // Ground collision
+                if (this.y + this.height >= 550) {
+                    this.y = 550 - this.height;
+                    this.velocityY = 0;
+                    this.onGround = true;
+                }
+
+                // Update position if driving
+                if (this.driving && this.driver) {
+                    // Driver controls the kart
+                    if (keys['ArrowLeft']) {
+                        this.velocityX = -this.speed;
+                        this.direction = -1;
+                    } else if (keys['ArrowRight']) {
+                        this.velocityX = this.speed;
+                        this.direction = 1;
+                    } else {
+                        this.velocityX *= 0.9; // Friction
+                    }
+
+                    // Update wheel rotation based on movement
+                    if (Math.abs(this.velocityX) > 0.5) {
+                        this.wheelRotation += this.velocityX * 0.1;
+                    }
+
+                    // Sync driver position with kart
+                    this.driver.x = this.x + 10;
+                    this.driver.y = this.y - 10;
+                    this.driver.velocityX = this.velocityX;
+                    this.driver.velocityY = this.velocityY;
+                    this.driver.direction = this.direction;
+                } else {
+                    this.velocityX *= 0.95; // Slow down when not driving
+                }
+
+                // Apply velocity
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+
+                // Level boundaries
+                if (this.x < 0) {
+                    this.x = 0;
+                    this.velocityX = 0;
+                }
+                if (this.x + this.width > LEVEL_WIDTH) {
+                    this.x = LEVEL_WIDTH - this.width;
+                    this.velocityX = 0;
+                }
+            }
+
+            checkPlayerCollision(player) {
+                const distance = Math.abs(player.x - this.x);
+                return distance < 60 && Math.abs(player.y - this.y) < 50;
+            }
+
+            checkGoombaCollision(goomba) {
+                // Check if kart hits goomba while moving
+                if (Math.abs(this.velocityX) > 1) {
+                    return this.x < goomba.x + goomba.width &&
+                           this.x + this.width > goomba.x &&
+                           this.y < goomba.y + goomba.height &&
+                           this.y + this.height > goomba.y;
+                }
+                return false;
+            }
+        }
+
+        // Yoshi class - rideable mount
+        class Yoshi {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 48;
+                this.height = 48;
+                this.velocityX = 1.5;
+                this.velocityY = 0;
+                this.mounted = false;
+                this.rider = null;
+                this.direction = 1;
+                this.animationFrame = 0;
+                this.onGround = false;
+            }
+
+            draw() {
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
+                // Only draw if on screen
+                if (screenX + this.width < -50 || screenX > canvas.width + 50) return;
+
+                this.animationFrame += 0.1;
+
+                ctx.save();
+                if (this.direction === -1) {
+                    ctx.translate(screenX + this.width, screenY);
+                    ctx.scale(-1, 1);
+                    ctx.translate(-screenX, -screenY);
+                }
+
+                // Body (green)
+                ctx.fillStyle = '#00ff00';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 24, screenY + 30, 20, 15, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Head
+                ctx.beginPath();
+                ctx.ellipse(screenX + 32, screenY + 18, 12, 14, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Snout
+                ctx.fillStyle = '#00dd00';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 38, screenY + 18, 8, 6, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Eye
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(screenX + 34, screenY + 14, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(screenX + 35, screenY + 14, 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Saddle
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(screenX + 18, screenY + 24, 16, 8);
+
+                // Shell spots
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath();
+                ctx.arc(screenX + 20, screenY + 28, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(screenX + 28, screenY + 32, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Legs
+                const legOffset = Math.sin(this.animationFrame) * 3;
+                ctx.fillStyle = '#00dd00';
+                ctx.fillRect(screenX + 14, screenY + 42 + legOffset, 6, 6);
+                ctx.fillRect(screenX + 28, screenY + 42 - legOffset, 6, 6);
+
+                // Draw rider if mounted
+                if (this.mounted && this.rider) {
+                    const riderX = screenX + 12;
+                    const riderY = screenY + 8;
+                    // Simple rider representation
+                    ctx.fillStyle = this.rider.color;
+                    ctx.fillRect(riderX, riderY, 20, 20);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 12px Arial';
+                    const riderLetter = this.rider.color === '#00aa00' ? 'L' : 'M';
+                    ctx.fillText(riderLetter, riderX + 6, riderY + 14);
+                }
+
+                ctx.restore();
+            }
+
+            update() {
+                if (this.mounted && this.rider) {
+                    // Rider controls Yoshi
+                    if (keys['ArrowLeft']) {
+                        this.velocityX = -MOVE_SPEED;
+                        this.direction = -1;
+                    } else if (keys['ArrowRight']) {
+                        this.velocityX = MOVE_SPEED;
+                        this.direction = 1;
+                    } else {
+                        this.velocityX = 0;
+                    }
+
+                    if (keys[' '] && this.onGround) {
+                        this.velocityY = JUMP_STRENGTH;
+                        this.onGround = false;
+                    }
+
+                    // Dismount with Y key
+                    if (keys['y'] || keys['Y']) {
+                        this.rider.ridingYoshi = null;
+                        this.rider.y = this.y - this.rider.height;
+                        this.mounted = false;
+                        this.rider = null;
+                        keys['y'] = false;
+                        keys['Y'] = false;
+                    }
+                } else {
+                    // Wander slowly when not mounted
+                    if (Math.random() < 0.01) {
+                        this.velocityX = -this.velocityX;
+                        this.direction = -this.direction;
+                    }
+                }
+
+                this.velocityY += GRAVITY;
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+
+                // Keep in bounds
+                if (this.x < 0) this.x = 0;
+                if (this.x + this.width > LEVEL_WIDTH) this.x = LEVEL_WIDTH - this.width;
+
+                // Reset if fell off
+                if (this.y > 700) {
+                    this.y = 500;
+                }
+
+                // Platform collision
+                this.onGround = false;
+                platforms.forEach(platform => {
+                    if (this.checkCollision(platform)) {
+                        if (this.velocityY > 0 && this.y + this.height - this.velocityY <= platform.y) {
+                            this.y = platform.y - this.height;
+                            this.velocityY = 0;
+                            this.onGround = true;
+                        }
+                    }
+                });
+
+                // Question block collision
+                questionBlocks.forEach(block => {
+                    if (block.checkCollision(this)) {
+                        if (this.velocityY > 0 && this.y + this.height - this.velocityY <= block.y) {
+                            this.y = block.y - this.height;
+                            this.velocityY = 0;
+                            this.onGround = true;
+                        }
+                    }
+                });
+            }
+
+            checkCollision(platform) {
+                return this.x < platform.x + platform.width &&
+                       this.x + this.width > platform.x &&
+                       this.y < platform.y + platform.height &&
+                       this.y + this.height > platform.y;
+            }
+
+            checkPlayerCollision(player) {
+                if (this.mounted) return false;
+                return player.x < this.x + this.width &&
+                       player.x + player.width > this.x &&
+                       player.y < this.y + this.height &&
+                       player.y + player.height > this.y;
+            }
+        }
+
         // Player will be created after character selection
         let player = null;
 
@@ -1506,37 +1898,38 @@
         });
 
         // Create question blocks throughout the level (some with mushrooms)
+        // Positioned to be reachable - not on top of solid blocks
         const questionBlocks = [
-            new QuestionBlock(400, 350, true), // Mushroom!
-            new QuestionBlock(550, 500),
-            new QuestionBlock(800, 300),
-            new QuestionBlock(950, 400),
+            new QuestionBlock(400, 380, true), // Mushroom! - In air, reachable by jump
+            new QuestionBlock(550, 480),       // Low enough to hit
+            new QuestionBlock(800, 320),       // In air
+            new QuestionBlock(950, 380),       // Reachable
 
-            new QuestionBlock(1200, 350),
-            new QuestionBlock(1400, 250, true), // Mushroom!
-            new QuestionBlock(1650, 300),
-            new QuestionBlock(1900, 450),
+            new QuestionBlock(1200, 330),      // In air
+            new QuestionBlock(1400, 480, true), // Mushroom! - Ground level
+            new QuestionBlock(1650, 350),      // In air
+            new QuestionBlock(1900, 480),      // Reachable
 
-            new QuestionBlock(2100, 350),
-            new QuestionBlock(2350, 250),
-            new QuestionBlock(2600, 200, true), // Mushroom!
-            new QuestionBlock(2850, 350),
+            new QuestionBlock(2100, 380),      // In air
+            new QuestionBlock(2350, 480),      // Low position
+            new QuestionBlock(2600, 380, true), // Mushroom! - In air
+            new QuestionBlock(2850, 380),      // In air
 
-            new QuestionBlock(3100, 300),
-            new QuestionBlock(3250, 400),
-            new QuestionBlock(3600, 250, true), // Mushroom!
-            new QuestionBlock(3850, 350),
+            new QuestionBlock(3100, 350),      // In air
+            new QuestionBlock(3250, 480),      // Ground level
+            new QuestionBlock(3600, 380, true), // Mushroom! - In air
+            new QuestionBlock(3850, 380),      // In air
 
-            new QuestionBlock(4100, 300),
-            new QuestionBlock(4350, 400),
-            new QuestionBlock(4550, 250),
-            new QuestionBlock(4800, 350, true), // Mushroom!
+            new QuestionBlock(4100, 350),      // In air
+            new QuestionBlock(4350, 480),      // Ground level
+            new QuestionBlock(4550, 380),      // In air
+            new QuestionBlock(4800, 380, true), // Mushroom! - In air
 
-            // Additional blocks near platforms for easier access
-            new QuestionBlock(700, 300),
-            new QuestionBlock(1550, 400),
-            new QuestionBlock(2450, 200),
-            new QuestionBlock(3450, 250),
+            // Additional blocks in open areas - all reachable
+            new QuestionBlock(700, 350),       // In air, reachable
+            new QuestionBlock(1550, 380),      // In air
+            new QuestionBlock(2450, 380),      // In air
+            new QuestionBlock(3450, 380),      // In air
         ];
 
         // Create mushrooms array
@@ -1557,6 +1950,16 @@
             new Goomba(4500, 500),
             new Goomba(4900, 500),
             new Goomba(5200, 500),
+        ];
+
+        // Create Kart at the beginning
+        const karts = [
+            new Kart(300, 500)
+        ];
+
+        // Create Yoshi at the beginning
+        const yoshis = [
+            new Yoshi(200, 500)
         ];
 
         // Create dual flag pole with both Bowser and Mario flags
@@ -1651,6 +2054,58 @@
                 mushroom.draw();
             });
 
+            // Update and draw Karts
+            karts.forEach(kart => {
+                kart.update();
+                kart.draw();
+                
+                // Check for entering/exiting kart (Press K near Kart)
+                if ((keys['k'] || keys['K']) && !player.ridingYoshi) {
+                    if (player.drivingKart) {
+                        // Exit kart
+                        player.drivingKart = null;
+                        kart.driving = false;
+                        kart.driver = null;
+                        player.x = kart.x + kart.width + 10;
+                        player.y = kart.y;
+                        keys['k'] = false;
+                        keys['K'] = false;
+                    } else if (kart.checkPlayerCollision(player) && !kart.driving) {
+                        // Enter kart
+                        player.drivingKart = kart;
+                        kart.driving = true;
+                        kart.driver = player;
+                        keys['k'] = false;
+                        keys['K'] = false;
+                    }
+                }
+
+                // Check if kart hits Goombas
+                goombas.forEach(goomba => {
+                    if (!goomba.stomped && kart.checkGoombaCollision(goomba)) {
+                        goomba.stomp();
+                        score += 100; // Bonus for kart kill!
+                    }
+                });
+            });
+
+            // Update and draw Yoshi
+            yoshis.forEach(yoshi => {
+                yoshi.update();
+                yoshi.draw();
+                
+                // Check for mounting (Press Y near Yoshi)
+                if ((keys['y'] || keys['Y']) && !player.ridingYoshi) {
+                    if (yoshi.checkPlayerCollision(player) && !yoshi.mounted) {
+                        player.ridingYoshi = yoshi;
+                        yoshi.mounted = true;
+                        yoshi.rider = player;
+                        keys['y'] = false;
+                        keys['Y'] = false;
+                    }
+                }
+            });
+
             // Update and draw Goombas
             goombas.forEach(goomba => {
                 goomba.update();
@@ -1742,6 +2197,11 @@
                         ));
                     }, i * 400);
                 }
+
+                // Navigate to Stage 2 after 3 seconds
+                setTimeout(() => {
+                    window.location.href = 'stage2.html';
+                }, 3000);
             }
 
             // Update and draw fireworks
@@ -1790,15 +2250,15 @@
 
                 ctx.fillStyle = '#ffff00';
                 ctx.font = 'bold 48px Courier New';
-                ctx.fillText('LEVEL COMPLETE!', canvas.width / 2 - 250, canvas.height / 2);
+                ctx.fillText('STAGE 1 COMPLETE!', canvas.width / 2 - 280, canvas.height / 2 - 20);
 
                 ctx.fillStyle = '#fff';
                 ctx.font = 'bold 24px Courier New';
-                ctx.fillText(`Final Score: ${score}`, canvas.width / 2 - 120, canvas.height / 2 + 50);
-                ctx.fillText(`Completion Time: ${gameTime}s`, canvas.width / 2 - 150, canvas.height / 2 + 80);
-                ctx.fillText(`Deaths: ${deaths}`, canvas.width / 2 - 70, canvas.height / 2 + 110);
-                ctx.fillText(`Lives Remaining: ${lives}`, canvas.width / 2 - 140, canvas.height / 2 + 140);
-                ctx.fillText('Press R to restart', canvas.width / 2 - 140, canvas.height / 2 + 180);
+                ctx.fillText(`Final Score: ${score}`, canvas.width / 2 - 120, canvas.height / 2 + 30);
+                ctx.fillText(`Completion Time: ${gameTime}s`, canvas.width / 2 - 150, canvas.height / 2 + 60);
+                ctx.fillText(`Deaths: ${deaths}`, canvas.width / 2 - 70, canvas.height / 2 + 90);
+                ctx.fillText(`Lives Remaining: ${lives}`, canvas.width / 2 - 140, canvas.height / 2 + 120);
+                ctx.fillText('Proceeding to Desert Stage...', canvas.width / 2 - 200, canvas.height / 2 + 160);
             } else {
                 requestAnimationFrame(gameLoop);
             }

@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mario and Luigi Classic - Stage 3: Castle</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 50%, #000 100%);
+            font-family: 'Courier New', monospace;
+        }
+        #gameContainer {
+            text-align: center;
+        }
+        canvas {
+            border: 4px solid #666;
+            background: linear-gradient(180deg, #333 0%, #1a1a1a 70%, #000 70%);
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        #info {
+            color: white;
+            margin-top: 10px;
+            font-size: 14px;
+            text-shadow: 2px 2px 0px #000;
+        }
+        .title {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-shadow: 3px 3px 0px #ff0000;
+        }
+        .stage-title {
+            color: #ff0000;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 0px #000;
+        }
+        #characterSelect {
+            background: rgba(0, 0, 0, 0.95);
+            padding: 40px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            border: 3px solid #ff0000;
+        }
+        #characterSelect h2 {
+            color: #ff0000;
+            font-size: 32px;
+            margin-bottom: 30px;
+            text-shadow: 3px 3px 0px #000;
+        }
+        .character-buttons {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+        }
+        .character-btn {
+            width: 200px;
+            padding: 20px;
+            font-size: 24px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            border: 4px solid #fff;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            text-shadow: 2px 2px 0px #000;
+        }
+        .character-btn:hover {
+            transform: scale(1.1);
+        }
+        .character-btn.mario {
+            background: linear-gradient(135deg, #ff0000, #cc0000);
+            color: white;
+        }
+        .character-btn.luigi {
+            background: linear-gradient(135deg, #00aa00, #008800);
+            color: white;
+        }
+        .hidden {
+            display: none;
+        }
+        .stage-nav {
+            margin-top: 20px;
+        }
+        .stage-nav a {
+            color: #ff0000;
+            margin: 0 10px;
+            text-decoration: none;
+            font-weight: bold;
+            text-shadow: 2px 2px 0px #000;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div class="title">MARIO AND LUIGI CLASSIC</div>
+        <div class="stage-title">STAGE 3: BOWSER'S CASTLE</div>
+
+        <div id="characterSelect">
+            <h2>FINAL BOSS STAGE</h2>
+            <div class="character-buttons">
+                <button class="character-btn mario" onclick="selectCharacter('mario')">MARIO</button>
+                <button class="character-btn luigi" onclick="selectCharacter('luigi')">LUIGI</button>
+            </div>
+        </div>
+
+        <canvas id="gameCanvas" width="800" height="600" class="hidden"></canvas>
+        <div id="info" class="hidden">
+            <div>BOSS FIGHT! Defeat Bowser! Jump on him 5 times! Ride Yoshi (Press Y)!</div>
+        </div>
+        <div class="stage-nav">
+            <a href="stage2.html">← Stage 2</a>
+            <a href="index.html">Back to Stage 1</a>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const GRAVITY = 0.5;
+        const JUMP_STRENGTH = -12;
+        const MOVE_SPEED = 5;
+        const PLAYER_WIDTH = 32;
+        const PLAYER_HEIGHT = 48;
+
+        let camera = { x: 0, y: 0 };
+        let keys = {};
+        let score = 0;
+        let player = null;
+        let bowser = null;
+        let gameStarted = false;
+        let bossDefeated = false;
+        let victoryTimer = 0;
+
+        class Player {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.width = PLAYER_WIDTH;
+                this.height = PLAYER_HEIGHT;
+                this.velocityX = 0;
+                this.velocityY = 0;
+                this.color = color;
+                this.onGround = false;
+                this.direction = 1;
+                this.animationFrame = 0;
+                this.ridingYoshi = null;
+                this.drivingKart = null;
+            }
+
+            draw() {
+                // Don't draw if riding Yoshi or driving Kart
+                if (this.ridingYoshi || this.drivingKart) return;
+
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
+                if (Math.abs(this.velocityX) > 0 && this.onGround) {
+                    this.animationFrame += 0.2;
+                }
+
+                const legOffset = Math.sin(this.animationFrame) * 5;
+
+                ctx.save();
+                if (this.direction === -1) {
+                    ctx.translate(screenX + this.width, screenY);
+                    ctx.scale(-1, 1);
+                    ctx.translate(-screenX, -screenY);
+                }
+
+                // Hat
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.ellipse(screenX + 16, screenY + 6, 10, 7, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 10px Arial';
+                const hatLetter = this.color === '#00aa00' ? 'L' : 'M';
+                ctx.fillText(hatLetter, screenX + 13, screenY + 9);
+
+                // Head
+                ctx.fillStyle = '#ffcc99';
+                ctx.beginPath();
+                ctx.arc(screenX + 16, screenY + 18, 9, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Eye
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 20, screenY + 16, 4, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(screenX + 22, screenY + 16, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Body
+                ctx.fillStyle = this.color;
+                ctx.fillRect(screenX + 10, screenY + 24, 14, 10);
+
+                // Overalls
+                ctx.fillStyle = '#1E90FF';
+                ctx.fillRect(screenX + 9, screenY + 32, 16, 12);
+
+                // Legs - FIXED
+                ctx.fillStyle = '#1E90FF';
+                ctx.lineWidth = 6;
+                ctx.lineCap = 'round';
+
+                ctx.beginPath();
+                ctx.moveTo(screenX + 18, screenY + 43);
+                ctx.lineTo(screenX + 18, screenY + 46 + legOffset);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(screenX + 14, screenY + 43);
+                ctx.lineTo(screenX + 12, screenY + 46 - legOffset);
+                ctx.stroke();
+
+                // Shoes
+                ctx.fillStyle = '#8B4513';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 20, screenY + 46 + legOffset, 6, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(screenX + 11, screenY + 46 - legOffset, 6, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            update() {
+                // Update mount if riding
+                if (this.ridingYoshi) {
+                    this.x = this.ridingYoshi.x;
+                    this.y = this.ridingYoshi.y - this.height;
+                    return;
+                }
+
+                // Update if driving Kart
+                if (this.drivingKart) {
+                    return;
+                }
+
+                if (keys['ArrowLeft']) {
+                    this.velocityX = -MOVE_SPEED;
+                    this.direction = -1;
+                } else if (keys['ArrowRight']) {
+                    this.velocityX = MOVE_SPEED;
+                    this.direction = 1;
+                } else {
+                    this.velocityX = 0;
+                }
+
+                if (keys[' '] && this.onGround) {
+                    this.velocityY = JUMP_STRENGTH;
+                    this.onGround = false;
+                }
+
+                this.velocityY += GRAVITY;
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+
+                if (this.x < 0) this.x = 0;
+                if (this.x + this.width > 800) this.x = 800 - this.width;
+
+                if (this.y > 700) {
+                    this.x = 100;
+                    this.y = 300;
+                    this.velocityX = 0;
+                    this.velocityY = 0;
+                }
+
+                this.onGround = false;
+                if (this.y + this.height >= 550) {
+                    this.y = 550 - this.height;
+                    this.velocityY = 0;
+                    this.onGround = true;
+                }
+            }
+
+            checkCollision(obj) {
+                return this.x < obj.x + obj.width &&
+                       this.x + this.width > obj.x &&
+                       this.y < obj.y + obj.height &&
+                       this.y + this.height > obj.y;
+            }
+        }
+
+        // Kart class
+        class Kart {
+            constructor(x, y) { this.x = x; this.y = y; this.width = 60; this.height = 40; this.velocityX = 0; this.velocityY = 0; this.driving = false; this.driver = null; this.direction = 1; this.onGround = false; this.speed = 5; this.wheelRotation = 0; }
+            draw() {
+                const screenX = this.x - camera.x, screenY = this.y - camera.y;
+                if (screenX + this.width < -50 || screenX > canvas.width + 50) return;
+                ctx.save(); if (this.direction === -1) { ctx.translate(screenX + this.width, screenY); ctx.scale(-1, 1); ctx.translate(-screenX, -screenY); }
+                ctx.fillStyle = '#ff0000'; ctx.fillRect(screenX + 10, screenY + 10, 40, 20);
+                ctx.beginPath(); ctx.moveTo(screenX + 50, screenY + 15); ctx.lineTo(screenX + 55, screenY + 20); ctx.lineTo(screenX + 50, screenY + 25); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = 'rgba(100, 200, 255, 0.6)'; ctx.fillRect(screenX + 15, screenY + 12, 20, 10);
+                ctx.fillStyle = '#333'; ctx.save(); ctx.translate(screenX + 15, screenY + 30); ctx.rotate(this.wheelRotation); ctx.fillRect(-5, -5, 10, 10); ctx.restore();
+                ctx.save(); ctx.translate(screenX + 45, screenY + 30); ctx.rotate(this.wheelRotation); ctx.fillRect(-5, -5, 10, 10); ctx.restore();
+                ctx.fillStyle = '#888'; ctx.beginPath(); ctx.arc(screenX + 15, screenY + 30, 3, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(screenX + 45, screenY + 30, 3, 0, Math.PI * 2); ctx.fill();
+                if (this.driving && this.driver) { const driverX = screenX + 20, driverY = screenY + 5; ctx.fillStyle = this.driver.color; ctx.beginPath(); ctx.ellipse(driverX + 8, driverY + 3, 6, 4, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = 'bold 8px Arial'; const driverLetter = this.driver.color === '#00aa00' ? 'L' : 'M'; ctx.fillText(driverLetter, driverX + 6, driverY + 5); ctx.fillStyle = '#ffcc99'; ctx.beginPath(); ctx.arc(driverX + 8, driverY + 10, 6, 0, Math.PI * 2); ctx.fill(); }
+                ctx.restore();
+            }
+            update() {
+                this.velocityY += 0.5; this.onGround = false;
+                platforms.forEach(platform => { if (this.velocityY >= 0 && this.x + this.width > platform.x && this.x < platform.x + platform.width && this.y + this.height <= platform.y && this.y + this.height + this.velocityY >= platform.y) { this.y = platform.y - this.height; this.velocityY = 0; this.onGround = true; } });
+                if (this.y + this.height >= 550) { this.y = 550 - this.height; this.velocityY = 0; this.onGround = true; }
+                if (this.driving && this.driver) { if (keys['ArrowLeft']) { this.velocityX = -this.speed; this.direction = -1; } else if (keys['ArrowRight']) { this.velocityX = this.speed; this.direction = 1; } else { this.velocityX *= 0.9; } if (Math.abs(this.velocityX) > 0.5) { this.wheelRotation += this.velocityX * 0.1; } this.driver.x = this.x + 10; this.driver.y = this.y - 10; this.driver.velocityX = this.velocityX; this.driver.velocityY = this.velocityY; this.driver.direction = this.direction; } else { this.velocityX *= 0.95; }
+                this.x += this.velocityX; this.y += this.velocityY;
+                if (this.x < 0) { this.x = 0; this.velocityX = 0; } if (this.x + this.width > LEVEL_WIDTH) { this.x = LEVEL_WIDTH - this.width; this.velocityX = 0; }
+            }
+            checkPlayerCollision(player) { return Math.abs(player.x - this.x) < 60 && Math.abs(player.y - this.y) < 50; }
+            checkGoombaCollision(goomba) { if (Math.abs(this.velocityX) > 1) { return this.x < goomba.x + goomba.width && this.x + this.width > goomba.x && this.y < goomba.y + goomba.height && this.y + this.height > goomba.y; } return false; }
+        }
+
+        // Yoshi class
+        class Yoshi {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 48;
+                this.height = 48;
+                this.velocityX = 2;
+                this.velocityY = 0;
+                this.mounted = false;
+                this.rider = null;
+                this.direction = 1;
+                this.animationFrame = 0;
+                this.onGround = false;
+            }
+
+            draw() {
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
+                this.animationFrame += 0.1;
+
+                ctx.save();
+                if (this.direction === -1) {
+                    ctx.translate(screenX + this.width, screenY);
+                    ctx.scale(-1, 1);
+                    ctx.translate(-screenX, -screenY);
+                }
+
+                // Body (green)
+                ctx.fillStyle = '#00ff00';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 24, screenY + 30, 20, 15, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Head
+                ctx.beginPath();
+                ctx.ellipse(screenX + 32, screenY + 18, 12, 14, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Snout
+                ctx.fillStyle = '#00dd00';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 38, screenY + 18, 8, 6, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Eye
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(screenX + 34, screenY + 14, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(screenX + 35, screenY + 14, 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Saddle
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(screenX + 18, screenY + 24, 16, 8);
+
+                // Shell spots
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath();
+                ctx.arc(screenX + 20, screenY + 28, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(screenX + 28, screenY + 32, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Legs
+                const legOffset = Math.sin(this.animationFrame) * 3;
+                ctx.fillStyle = '#00dd00';
+                ctx.fillRect(screenX + 14, screenY + 42 + legOffset, 6, 6);
+                ctx.fillRect(screenX + 28, screenY + 42 - legOffset, 6, 6);
+
+                // Draw rider if mounted
+                if (this.mounted && this.rider) {
+                    const riderX = screenX + 12;
+                    const riderY = screenY + 8;
+                    ctx.fillStyle = this.rider.color;
+                    ctx.fillRect(riderX, riderY, 20, 20);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 12px Arial';
+                    const riderLetter = this.rider.color === '#00aa00' ? 'L' : 'M';
+                    ctx.fillText(riderLetter, riderX + 6, riderY + 14);
+                }
+
+                ctx.restore();
+            }
+
+            update() {
+                if (this.mounted && this.rider) {
+                    // Rider controls Yoshi
+                    if (keys['ArrowLeft']) {
+                        this.velocityX = -MOVE_SPEED;
+                        this.direction = -1;
+                    } else if (keys['ArrowRight']) {
+                        this.velocityX = MOVE_SPEED;
+                        this.direction = 1;
+                    } else {
+                        this.velocityX = 0;
+                    }
+
+                    if (keys[' '] && this.onGround) {
+                        this.velocityY = JUMP_STRENGTH;
+                        this.onGround = false;
+                    }
+
+                    // Dismount with Y key
+                    if (keys['y'] || keys['Y']) {
+                        this.rider.ridingYoshi = null;
+                        this.rider.y = this.y - this.rider.height;
+                        this.mounted = false;
+                        this.rider = null;
+                        keys['y'] = false;
+                        keys['Y'] = false;
+                    }
+                } else {
+                    // Stay put or wander slowly
+                    if (Math.random() < 0.01) {
+                        this.velocityX = -this.velocityX;
+                        this.direction = -this.direction;
+                    }
+                }
+
+                this.velocityY += GRAVITY;
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+
+                // Keep in bounds
+                if (this.x < 0) this.x = 0;
+                if (this.x > 800 - this.width) this.x = 800 - this.width;
+
+                // Ground collision
+                this.onGround = false;
+                if (this.y + this.height >= 550) {
+                    this.y = 550 - this.height;
+                    this.velocityY = 0;
+                    this.onGround = true;
+                }
+            }
+
+            checkPlayerCollision(player) {
+                if (this.mounted) return false;
+                return player.x < this.x + this.width &&
+                       player.x + player.width > this.x &&
+                       player.y < this.y + this.height &&
+                       player.y + player.height > this.y;
+            }
+        }
+
+        class Bowser {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 80;
+                this.height = 100;
+                this.velocityX = 3;
+                this.velocityY = 0;
+                this.direction = -1;
+                this.health = 5;
+                this.hitCooldown = 0;
+                this.animationFrame = 0;
+                this.jumpTimer = 0;
+                this.fireballTimer = 0;
+            }
+
+            draw() {
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
+                this.animationFrame += 0.1;
+
+                ctx.save();
+                if (this.direction === 1) {
+                    ctx.translate(screenX + this.width, screenY);
+                    ctx.scale(-1, 1);
+                    ctx.translate(-screenX, -screenY);
+                }
+
+                // Shell/Body (green)
+                ctx.fillStyle = '#228B22';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 40, screenY + 60, 35, 30, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Spikes on shell
+                ctx.fillStyle = '#fff';
+                for (let i = 0; i < 6; i++) {
+                    const angle = (i / 6) * Math.PI + Math.PI;
+                    const spikeX = screenX + 40 + Math.cos(angle) * 30;
+                    const spikeY = screenY + 60 + Math.sin(angle) * 25;
+                    ctx.beginPath();
+                    ctx.moveTo(spikeX, spikeY);
+                    ctx.lineTo(spikeX - 5, spikeY - 10);
+                    ctx.lineTo(spikeX + 5, spikeY - 10);
+                    ctx.fill();
+                }
+
+                // Head (orange/yellow)
+                ctx.fillStyle = '#FFA500';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 50, screenY + 30, 25, 28, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Horns
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.moveTo(screenX + 30, screenY + 15);
+                ctx.lineTo(screenX + 25, screenY + 5);
+                ctx.lineTo(screenX + 35, screenY + 10);
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.moveTo(screenX + 70, screenY + 15);
+                ctx.lineTo(screenX + 75, screenY + 5);
+                ctx.lineTo(screenX + 65, screenY + 10);
+                ctx.fill();
+
+                // Eyes (angry)
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(screenX + 40, screenY + 25, 10, 8);
+                ctx.fillRect(screenX + 55, screenY + 25, 10, 8);
+
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(screenX + 45, screenY + 27, 4, 4);
+                ctx.fillRect(screenX + 60, screenY + 27, 4, 4);
+
+                // Eyebrows (angry)
+                ctx.strokeStyle = '#8B4513';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(screenX + 38, screenY + 22);
+                ctx.lineTo(screenX + 50, screenY + 24);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(screenX + 53, screenY + 24);
+                ctx.lineTo(screenX + 67, screenY + 22);
+                ctx.stroke();
+
+                // Snout
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.ellipse(screenX + 52, screenY + 40, 12, 10, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Nostrils
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(screenX + 47, screenY + 42, 4, 5);
+                ctx.fillRect(screenX + 54, screenY + 42, 4, 5);
+
+                // Mouth (evil grin)
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(screenX + 52, screenY + 45, 8, 0.2, Math.PI - 0.2);
+                ctx.stroke();
+
+                // Teeth
+                ctx.fillStyle = '#fff';
+                for (let i = 0; i < 4; i++) {
+                    ctx.fillRect(screenX + 45 + i * 4, screenY + 50, 3, 5);
+                }
+
+                // Arms
+                ctx.fillStyle = '#FFA500';
+                ctx.fillRect(screenX + 10, screenY + 50, 15, 25);
+                ctx.fillRect(screenX + 55, screenY + 50, 15, 25);
+
+                // Claws
+                ctx.fillStyle = '#fff';
+                for (let i = 0; i < 3; i++) {
+                    ctx.fillRect(screenX + 12 + i * 4, screenY + 75, 3, 6);
+                    ctx.fillRect(screenX + 57 + i * 4, screenY + 75, 3, 6);
+                }
+
+                // Legs
+                const legOffset = Math.sin(this.animationFrame) * 3;
+                ctx.fillStyle = '#FFA500';
+                ctx.fillRect(screenX + 20, screenY + 85 + legOffset, 12, 15);
+                ctx.fillRect(screenX + 48, screenY + 85 - legOffset, 12, 15);
+
+                // Health bar
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(screenX, screenY - 10, this.width, 5);
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(screenX, screenY - 10, (this.width * this.health) / 5, 5);
+
+                ctx.restore();
+            }
+
+            update() {
+                if (this.hitCooldown > 0) this.hitCooldown--;
+
+                // AI Movement
+                this.x += this.velocityX * this.direction;
+
+                // Turn around at edges
+                if (this.x < 100 || this.x > 650) {
+                    this.direction = -this.direction;
+                }
+
+                // Jump occasionally
+                this.jumpTimer++;
+                if (this.jumpTimer > 120 && this.y >= 450) {
+                    this.velocityY = -15;
+                    this.jumpTimer = 0;
+                }
+
+                this.velocityY += GRAVITY;
+                this.y += this.velocityY;
+
+                // Ground collision
+                if (this.y + this.height >= 550) {
+                    this.y = 550 - this.height;
+                    this.velocityY = 0;
+                }
+
+                // Shoot fireballs
+                this.fireballTimer++;
+                if (this.fireballTimer > 180) {
+                    this.shootFireball();
+                    this.fireballTimer = 0;
+                }
+            }
+
+            shootFireball() {
+                const fireX = this.direction === 1 ? this.x + this.width : this.x;
+                const fireY = this.y + this.height / 2;
+                bowserFireballs.push({
+                    x: fireX,
+                    y: fireY,
+                    velocityX: this.direction * 6,
+                    velocityY: -2,
+                    active: true
+                });
+            }
+
+            takeDamage() {
+                if (this.hitCooldown === 0) {
+                    this.health--;
+                    this.hitCooldown = 60;
+                    score += 100;
+
+                    if (this.health <= 0) {
+                        bossDefeated = true;
+                    }
+                }
+            }
+
+            checkPlayerStomp(player) {
+                if (this.hitCooldown > 0) return false;
+
+                const collision = player.x < this.x + this.width &&
+                                 player.x + player.width > this.x &&
+                                 player.y < this.y + this.height &&
+                                 player.y + player.height > this.y;
+
+                if (collision) {
+                    if (player.velocityY > 0 && player.y + player.height - player.velocityY <= this.y + 20) {
+                        this.takeDamage();
+                        player.velocityY = -10;
+                        return true;
+                    } else {
+                        // Player hit - reset position
+                        player.x = 100;
+                        player.y = 300;
+                        score = Math.max(0, score - 50);
+                    }
+                }
+                return false;
+            }
+        }
+
+        let bowserFireballs = [];
+
+        // Kart at the beginning
+        const karts = [
+            new Kart(200, 450)
+        ];
+
+        // Yoshi at the beginning
+        const yoshis = [
+            new Yoshi(100, 450)
+        ];
+
+        function drawCastleBackground() {
+            // Dark walls
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Stone bricks
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < canvas.width; x += 40) {
+                for (let y = 0; y < canvas.height; y += 40) {
+                    ctx.strokeRect(x, y, 40, 40);
+                }
+            }
+
+            // Torches
+            const torchPositions = [100, 300, 500, 700];
+            torchPositions.forEach(x => {
+                // Torch holder
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(x, 100, 10, 40);
+
+                // Flame
+                ctx.fillStyle = '#FF4500';
+                ctx.beginPath();
+                ctx.moveTo(x, 90);
+                ctx.lineTo(x + 5, 80);
+                ctx.lineTo(x + 10, 90);
+                ctx.fill();
+
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.arc(x + 5, 85, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawCastleBackground();
+
+            // Ground
+            ctx.fillStyle = '#2d2d2d';
+            ctx.fillRect(0, 550, canvas.width, 50);
+
+            // Update and draw Karts
+            karts.forEach(kart => {
+                kart.update();
+                kart.draw();
+                
+                // Check for entering/exiting kart
+                if ((keys['k'] || keys['K']) && !player.ridingYoshi && !bossDefeated) {
+                    if (player.drivingKart) {
+                        player.drivingKart = null;
+                        kart.driving = false;
+                        kart.driver = null;
+                        player.x = kart.x + kart.width + 10;
+                        player.y = kart.y;
+                        keys['k'] = false;
+                        keys['K'] = false;
+                    } else if (kart.checkPlayerCollision(player) && !kart.driving) {
+                        player.drivingKart = kart;
+                        kart.driving = true;
+                        kart.driver = player;
+                        keys['k'] = false;
+                        keys['K'] = false;
+                    }
+                }
+
+                // Check if kart hits Bowser
+                if (!bossDefeated && kart.driving && Math.abs(kart.velocityX) > 2) {
+                    const dist = Math.abs(kart.x - bowser.x);
+                    if (dist < 80 && Math.abs(kart.y - bowser.y) < 60) {
+                        bowser.health -= 1;
+                        kart.velocityX *= -0.5;
+                        score += 50;
+                    }
+                }
+            });
+
+            // Draw Yoshi
+            yoshis.forEach(yoshi => {
+                yoshi.update();
+                yoshi.draw();
+                
+                // Check for mounting
+                if ((keys['y'] || keys['Y']) && !player.ridingYoshi && !bossDefeated) {
+                    if (yoshi.checkPlayerCollision(player) && !yoshi.mounted) {
+                        player.ridingYoshi = yoshi;
+                        yoshi.mounted = true;
+                        yoshi.rider = player;
+                        keys['y'] = false;
+                        keys['Y'] = false;
+                    }
+                }
+            });
+
+            if (!bossDefeated) {
+                bowser.update();
+                bowser.draw();
+                bowser.checkPlayerStomp(player);
+
+                // Update and draw Bowser's fireballs
+                bowserFireballs = bowserFireballs.filter(f => f.active);
+                bowserFireballs.forEach(fireball => {
+                    fireball.velocityY += GRAVITY * 0.5;
+                    fireball.x += fireball.velocityX;
+                    fireball.y += fireball.velocityY;
+
+                    if (fireball.y > 550 || fireball.x < 0 || fireball.x > 800) {
+                        fireball.active = false;
+                    }
+
+                    // Draw fireball
+                    ctx.fillStyle = '#FF4500';
+                    ctx.beginPath();
+                    ctx.arc(fireball.x, fireball.y, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#FFD700';
+                    ctx.beginPath();
+                    ctx.arc(fireball.x, fireball.y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Check collision with player
+                    if (Math.abs(fireball.x - player.x) < 30 && Math.abs(fireball.y - player.y) < 30) {
+                        player.x = 100;
+                        player.y = 300;
+                        score = Math.max(0, score - 50);
+                        fireball.active = false;
+                    }
+                });
+            } else {
+                victoryTimer++;
+                
+                // Victory message
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#FFD700';
+                ctx.font = 'bold 48px Courier New';
+                ctx.fillText('BOWSER DEFEATED!', canvas.width / 2 - 280, canvas.height / 2 - 50);
+
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 32px Courier New';
+                ctx.fillText('YOU WIN!', canvas.width / 2 - 100, canvas.height / 2 + 20);
+
+                ctx.font = 'bold 24px Courier New';
+                ctx.fillText(`Final Score: ${score}`, canvas.width / 2 - 120, canvas.height / 2 + 60);
+                ctx.fillText('Press R to restart Stage 3', canvas.width / 2 - 180, canvas.height / 2 + 100);
+
+                // Add clickable link to return to Stage 1
+                ctx.fillStyle = '#00ff00';
+                ctx.fillText('Click here to return to Stage 1', canvas.width / 2 - 220, canvas.height / 2 + 140);
+                
+                // Check for click on the return link
+                canvas.style.cursor = 'pointer';
+
+                // Fireworks
+                if (victoryTimer % 20 === 0) {
+                    const x = Math.random() * canvas.width;
+                    const y = Math.random() * 300;
+                    for (let i = 0; i < 20; i++) {
+                        const angle = (Math.PI * 2 * i) / 20;
+                        ctx.fillStyle = ['#ff0000', '#00ff00', '#0000ff', '#ffff00'][i % 4];
+                        ctx.beginPath();
+                        ctx.arc(x + Math.cos(angle) * 30, y + Math.sin(angle) * 30, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+
+            player.update();
+            player.draw();
+
+            // UI
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 24px Courier New';
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.strokeText(`Score: ${score}`, 20, 30);
+            ctx.fillText(`Score: ${score}`, 20, 30);
+            ctx.strokeText(`Stage 3: BOSS`, canvas.width - 220, 30);
+            ctx.fillText(`Stage 3: BOSS`, canvas.width - 220, 30);
+
+            if (!bossDefeated) {
+                ctx.strokeText(`Bowser HP: ${bowser.health}/5`, canvas.width / 2 - 100, 30);
+                ctx.fillText(`Bowser HP: ${bowser.health}/5`, canvas.width / 2 - 100, 30);
+            }
+
+            // Yoshi indicator
+            if (player.ridingYoshi) {
+                ctx.fillStyle = '#00ff00';
+                ctx.strokeText('RIDING YOSHI (Y to dismount)', 20, 60);
+                ctx.fillText('RIDING YOSHI (Y to dismount)', 20, 60);
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function selectCharacter(character) {
+            const color = character === 'mario' ? '#ff0000' : '#00aa00';
+            player = new Player(100, 300, color);
+            bowser = new Bowser(600, 450);
+
+            document.getElementById('characterSelect').classList.add('hidden');
+            document.getElementById('gameCanvas').classList.remove('hidden');
+            document.getElementById('info').classList.remove('hidden');
+
+            gameStarted = true;
+            gameLoop();
+        }
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (e.key === 'r' || e.key === 'R') location.reload();
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Click handler for returning to Stage 1 after victory
+        canvas.addEventListener('click', (e) => {
+            if (bowser.health <= 0) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                // Check if click is in the "return to Stage 1" text area
+                if (y > canvas.height / 2 + 120 && y < canvas.height / 2 + 160) {
+                    window.location.href = 'index.html';
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+
